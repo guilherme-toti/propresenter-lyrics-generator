@@ -17,6 +17,24 @@ function nilUuid() {
   return { string: NIL_UUID };
 }
 
+/** Number-row hotkeys (1-9) assigned to groups in order, matching how a hand-built ProPresenter library normally gets them. */
+const GROUP_HOTKEY_CODES = [
+  "KEY_CODE_ANSI_1",
+  "KEY_CODE_ANSI_2",
+  "KEY_CODE_ANSI_3",
+  "KEY_CODE_ANSI_4",
+  "KEY_CODE_ANSI_5",
+  "KEY_CODE_ANSI_6",
+  "KEY_CODE_ANSI_7",
+  "KEY_CODE_ANSI_8",
+  "KEY_CODE_ANSI_9",
+];
+
+function groupHotKey(index: number): { code: string } | undefined {
+  const code = GROUP_HOTKEY_CODES[index];
+  return code ? { code } : undefined;
+}
+
 /**
  * Mirrors the color convention common ProPresenter libraries use for section groups. Labels are
  * usually Portuguese ("Refrão", "Ponte", "Introdução", "Verso"...) but English ones are matched
@@ -181,17 +199,19 @@ export function buildPresentationObject(song: Song) {
   const slideGroups = groupSlidesIntoSections(slideChunks);
 
   const cues: ReturnType<typeof buildCue>[] = [];
-  const cueGroups = slideGroups.map((group) => {
+  const cueGroups = slideGroups.map((group, index) => {
     const cueIdentifiers = group.slides.map((rows) => {
       const cue = buildCue(rows);
       cues.push(cue);
       return { string: cue.uuid.string };
     });
+    const hotKey = groupHotKey(index);
     return {
       group: {
         uuid: newUuid(),
         name: group.label,
         color: sectionColor(group.label),
+        ...(hotKey ? { hotKey } : {}),
       },
       cueIdentifiers,
     };
