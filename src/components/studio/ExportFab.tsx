@@ -53,7 +53,7 @@ export function ExportFab({ song }: { song: Song }) {
         onClick={handleExport}
         disabled={!canExport || status === "loading"}
         title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
-        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_24px_rgba(255,255,255,0.55)] transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         Exportar
