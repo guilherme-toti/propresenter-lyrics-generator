@@ -12,11 +12,15 @@ export function AppShell() {
   // real UI before then would make the first client render diverge from the server-rendered HTML.
   const mounted = useHasMounted();
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const openNewProjectDialog = () => setDialogOpen(true);
+  const toggleSidebar = () => setSidebarOpen((current) => !current);
 
   if (!mounted) {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
-        <Header />
+        <Header sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewProject={openNewProjectDialog} />
         <div className="flex flex-1" />
       </div>
     );
@@ -24,11 +28,11 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      <Header />
+      <Header sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewProject={openNewProjectDialog} />
       <div className="flex flex-1 overflow-hidden">
-        <LibrarySidebar onNewProject={() => setDialogOpen(true)} />
+        <LibrarySidebar open={sidebarOpen} onNewProject={openNewProjectDialog} />
         <main className="flex-1 overflow-y-auto">
-          <StudioShell onNewProject={() => setDialogOpen(true)} />
+          <StudioShell onNewProject={openNewProjectDialog} />
         </main>
       </div>
       <NewSongDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

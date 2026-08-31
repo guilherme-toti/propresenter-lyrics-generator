@@ -1,4 +1,4 @@
-# Poiema Lyrics Studio
+# PMA Lyrics Studio
 
 Turn a song into a bilingual (Português/English), line-by-line lyric alignment and export it straight to a ProPresenter 7 `.pro` file — no PDF, no manual re-typing in ProPresenter. Built for a church that only ever presents in these two languages: Editor A is always Português, Editor B is always English.
 

@@ -19,7 +19,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Poiema Lyrics Studio — letras bilíngues para o ProPresenter",
+  title: "PMA Lyrics Studio — letras bilíngues para o ProPresenter",
   description: "Gere alinhamentos de letras bilíngues com IA e exporte direto para o ProPresenter 7.",
 };
 

@@ -1,15 +1,36 @@
-import { Music2 } from "lucide-react";
+"use client";
 
-export function Header() {
+import { Menu, Plus } from "lucide-react";
+
+interface HeaderProps {
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  onNewProject: () => void;
+}
+
+export function Header({ sidebarOpen, onToggleSidebar, onNewProject }: HeaderProps) {
   return (
-    <header className="flex items-center gap-2 border-b border-line bg-cream-50 px-6 py-4">
-      <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-ink text-cream-50">
-        <Music2 size={16} />
-      </div>
-      <div className="leading-tight">
-        <p className="font-display text-base font-semibold text-ink">Poiema Lyrics Studio</p>
-        <p className="text-[11px] text-ink/45">Letras bilíngues → ProPresenter</p>
-      </div>
+    <header className="flex items-center gap-3 border-b border-line bg-cream-50 px-4 py-3">
+      <button
+        onClick={onToggleSidebar}
+        aria-label={sidebarOpen ? "Fechar biblioteca" : "Abrir biblioteca"}
+        aria-pressed={sidebarOpen}
+        className="rounded-full p-2 text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
+      >
+        <Menu size={18} />
+      </button>
+      <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>
+      <div className="flex-1" />
+      {!sidebarOpen && (
+        <button
+          onClick={onNewProject}
+          aria-label="Novo projeto"
+          className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/90"
+        >
+          <Plus size={14} />
+          Novo projeto
+        </button>
+      )}
     </header>
   );
 }
