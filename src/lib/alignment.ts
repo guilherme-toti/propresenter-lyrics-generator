@@ -172,15 +172,35 @@ export function deleteRow(rows: AlignedLine[], id: string): AlignedLine[] {
  * position in the list, not to whichever row object happens to sit there — otherwise moving a row
  * across a section boundary would drag the boundary along with the row it swapped past, and the
  * row could never become the first line of the section it moved into.
+ *
+ * That index-anchoring only works when the row changing position doesn't itself carry the
+ * boundary. If it does — i.e. it's the first row of its section and it's moving up, out of that
+ * section — a plain adjacent swap has no third row to hand the marker to, so it would wrongly
+ * attach "first of this section" to whatever was in the previous section instead. In that case,
+ * hand the marker off to the row right after it (the new first line of the section it's leaving).
  */
 export function moveRow(rows: AlignedLine[], id: string, direction: "up" | "down"): AlignedLine[] {
   const index = rows.findIndex((row) => row.id === id);
   const swapWith = direction === "up" ? index - 1 : index + 1;
   if (index === -1 || swapWith < 0 || swapWith >= rows.length) return rows;
+
+  const moving = rows[index];
+  const other = rows[swapWith];
   const next = [...rows];
   const contentAt = ({ id, a, b }: AlignedLine) => ({ id, a, b });
-  next[index] = { ...next[index], ...contentAt(rows[swapWith]) };
-  next[swapWith] = { ...next[swapWith], ...contentAt(rows[index]) };
+
+  if (direction === "up" && moving.sectionBreakBefore && !other.sectionBreakBefore) {
+    const successor = rows[index + 1];
+    if (successor && !successor.sectionBreakBefore) {
+      next[index + 1] = { ...successor, sectionBreakBefore: true, sectionLabel: moving.sectionLabel };
+    }
+    next[index] = { ...other, sectionBreakBefore: false, sectionLabel: undefined };
+    next[swapWith] = { ...moving, sectionBreakBefore: false, sectionLabel: undefined };
+    return next;
+  }
+
+  next[index] = { ...next[index], ...contentAt(other) };
+  next[swapWith] = { ...next[swapWith], ...contentAt(moving) };
   return next;
 }
 
