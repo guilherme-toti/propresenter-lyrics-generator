@@ -9,11 +9,12 @@ This tool is used by a bilingual church that only ever needs two languages: Engl
 Rules:
 - Identify the single most likely song and its artist/writer from the hint.
 - Determine which of the two supported languages (English or Português (Brasil)) the song's real/original lyrics were written in — that is "originalLanguage" — and set "translationLanguage" to the other one. (If the song was actually written in a third language, treat whichever of English/Português (Brasil) has the best-known official congregational version as the original, and produce a faithful version in the other.)
+- ALWAYS reproduce the FULL, most complete version of the song exactly as actually recorded/performed — not a shortened, radio-edit, or "first chorus only" version. Modern worship songs (Elevation Worship, Bethel Music, Maverick City Music, Passion, Hillsong, etc.) are very often extended live arrangements with many more sections than a simple verse/chorus structure: multiple verses, pre-chorus, chorus, bridge, refrain, interlude, vamp, tag/outro, post-chorus, key/vocalist changes, and several repeats of the chorus or bridge (sometimes with slightly different ad-libs each time). If you recognize the song as having such an extended arrangement, include ALL of it, in the correct order, not just the first pass through each section — this matters far more than keeping the response short.
 - Reproduce the ORIGINAL lyrics from memory, split into sections, one array entry per lyric line exactly as it would appear on a lyric slide.
-- Provide the TRANSLATION into the other language. If a well-known official/singable translation already exists (very common for congregational worship songs performed worldwide), use that one and set isOfficialTranslation to true. Otherwise write your own fluent, singable translation and set isOfficialTranslation to false.
+- Provide the TRANSLATION into the other language. If a well-known official/singable translation already exists (very common for congregational worship songs performed worldwide), use that one and set isOfficialTranslation to true. Otherwise translate literally and faithfully, line by line, prioritizing accuracy to the original meaning over rhyme or singability, and set isOfficialTranslation to false.
 - Within a section, "lines" must have the original and translation arrays the same length, and line i of the translation must correspond in meaning/position to line i of the original, so they can be displayed side by side.
-- If a section (like a chorus) repeats verbatim later in the song, include it again as its own entry in "sections" rather than referencing the earlier one.
-- Section "label" values must always be in Portuguese, regardless of which language the lyrics are in — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Introdução", "Final".
+- If a section (like a chorus) repeats later in the song — even with minor ad-lib differences — include it again as its own entry in "sections" rather than skipping or referencing the earlier one.
+- Section "label" values must always be in Portuguese, regardless of which language the lyrics are in — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Interlúdio", "Vamp", "Introdução", "Final".
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
 
 JSON schema:
@@ -35,7 +36,7 @@ The user pasted a song's lyrics into two editors, one language per editor, but t
 Your job is to reconcile the two texts into a clean, section-aligned, line-by-line structure:
 - Split both into sections and align them with each other.
 - Within a section, make sure "original" and "translation" arrays are the same length and line i of one corresponds in meaning/position to line i of the other.
-- If a line or section is missing from one side, fill it in yourself (translate it) rather than leaving it blank.
+- If a line or section is missing from one side, fill it in yourself — translate it literally and faithfully (prioritize accuracy to meaning over rhyme or singability) — rather than leaving it blank.
 - Remove accidental duplicate lines/sections; merge or split lines so they correspond 1:1.
 - If a section repeats verbatim later in the song, include it again as its own entry in "sections".
 - Preserve the actual wording of both languages exactly as given whenever it is already correct — only change what's necessary to fix alignment problems.
