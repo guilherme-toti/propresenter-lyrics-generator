@@ -46,19 +46,13 @@ export function ExportPanel({ song }: { song: Song }) {
 
   return (
     <Card>
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink/45">Exportar</p>
-      <h3 className="mb-1 font-display text-lg font-semibold text-ink">ProPresenter 7</h3>
-      <p className="mb-4 text-xs text-ink/45">
-        Exporta um arquivo <code className="rounded bg-ink/5 px-1">.pro</code> autocontido com os dois idiomas em
-        cada slide e fundo transparente — um slide para cada grupo de {song.exportOptions.linesPerSlide} linha
-        {song.exportOptions.linesPerSlide === 1 ? "" : "s"}, agrupados em grupos de slide do ProPresenter por seção.
-      </p>
+      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-ink/45">Exportar</p>
 
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
       <Button onClick={handleExport} disabled={!canExport || status === "loading"}>
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-        Exportar .pro
+        Exportar
       </Button>
       {!canExport && <p className="mt-2 text-xs text-ink/40">Alinhe pelo menos uma linha antes de exportar.</p>}
     </Card>
