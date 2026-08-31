@@ -100,11 +100,14 @@ const STYLE_B: Omit<RtfTextStyle, "fontSizePt"> = {
   alignment: "center",
 };
 
-/** Always renders both languages — the church only ever presents the bilingual pair. */
+/**
+ * Always renders both languages — the church only ever presents the bilingual pair. Element A is
+ * always Português (PT) and element B is always English (EN), matching the Editor A/B convention.
+ */
 function buildSlideElements(rows: AlignedLine[]) {
   return [
     buildTextElement(rows.map((r) => r.a), {
-      name: "Language A",
+      name: "PT",
       x: MARGIN_X,
       y: 60,
       width: BOX_WIDTH,
@@ -112,7 +115,7 @@ function buildSlideElements(rows: AlignedLine[]) {
       style: { ...STYLE_A, fontSizePt: 72 },
     }),
     buildTextElement(rows.map((r) => r.b), {
-      name: "Language B",
+      name: "EN",
       x: MARGIN_X,
       y: 560,
       width: BOX_WIDTH,
