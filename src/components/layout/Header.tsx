@@ -21,16 +21,14 @@ export function Header({ sidebarOpen, onToggleSidebar, onNewProject }: HeaderPro
       </button>
       <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>
       <div className="flex-1" />
-      {!sidebarOpen && (
-        <button
-          onClick={onNewProject}
-          aria-label="Novo projeto"
-          className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/90"
-        >
-          <Plus size={14} />
-          Novo projeto
-        </button>
-      )}
+      <button
+        onClick={onNewProject}
+        aria-label="Novo projeto"
+        className="inline-flex items-center gap-1.5 rounded-full bg-ink px-3 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-ink/90"
+      >
+        <Plus size={14} />
+        Novo projeto
+      </button>
     </header>
   );
 }
