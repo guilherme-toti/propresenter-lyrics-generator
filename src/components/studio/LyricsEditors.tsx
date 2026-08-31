@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
-import { RefreshCw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
-import { Input, TextArea } from "@/components/ui/Field";
+import { TextArea } from "@/components/ui/Field";
 import { splitIntoBlocks } from "@/lib/alignment";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
@@ -17,31 +17,22 @@ function EditorPanel({
   side: "languageA" | "languageB";
 }) {
   const setLanguageRaw = useLibraryStore((s) => s.setLanguageRaw);
-  const updateSong = useLibraryStore((s) => s.updateSong);
-  const block = song[side];
+  const raw = song[side];
 
   const stats = useMemo(() => {
-    const blocks = splitIntoBlocks(block.raw);
+    const blocks = splitIntoBlocks(raw);
     const lines = blocks.reduce((sum, b) => sum + b.length, 0);
     return { lines, sections: blocks.length };
-  }, [block.raw]);
+  }, [raw]);
 
   return (
     <Card className="flex flex-1 flex-col">
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">
-          {side === "languageA" ? "Editor A" : "Editor B"}
-        </p>
-      </div>
-      <Input
-        className="mb-2 !w-auto max-w-[220px] font-display text-base font-semibold"
-        value={block.label}
-        onChange={(e) => updateSong(song.id, { [side]: { ...block, label: e.target.value } })}
-        placeholder="Language name"
-      />
+      <p className="mb-2 font-display text-base font-semibold text-ink">
+        {side === "languageA" ? "Editor A" : "Editor B"}
+      </p>
       <TextArea
         rows={12}
-        value={block.raw}
+        value={raw}
         onChange={(e) => setLanguageRaw(song.id, side, e.target.value)}
         placeholder="Paste lyrics here. Leave a blank line between sections (verse, chorus, bridge…)."
       />
@@ -55,6 +46,31 @@ function EditorPanel({
 
 export function LyricsEditors({ song }: { song: Song }) {
   const realignFromManualText = useLibraryStore((s) => s.realignFromManualText);
+  const applyAiRealignment = useLibraryStore((s) => s.applyAiRealignment);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+  const hasAlignment = song.alignment.length > 0;
+
+  const handleRealignWithAi = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const res = await fetch("/api/realign-song", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ languageARaw: song.languageA, languageBRaw: song.languageB }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? "Something went wrong.");
+      }
+      applyAiRealignment(song.id, data);
+    } catch (err) {
+      setAiError(err instanceof Error ? err.message : "Something went wrong.");
+    } finally {
+      setAiLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -62,11 +78,20 @@ export function LyricsEditors({ song }: { song: Song }) {
         <EditorPanel song={song} side="languageA" />
         <EditorPanel song={song} side="languageB" />
       </div>
-      <div className="mt-3 flex justify-center">
-        <Button variant="secondary" size="sm" onClick={() => realignFromManualText(song.id)}>
-          <RefreshCw size={13} />
-          {song.alignment.length > 0 ? "Re-align from text" : "Align lyrics"}
-        </Button>
+      <div className="mt-3 flex flex-col items-center gap-2">
+        <div className="flex justify-center gap-2">
+          <Button variant="secondary" size="sm" onClick={() => realignFromManualText(song.id)}>
+            <RefreshCw size={13} />
+            {hasAlignment ? "Re-align from text" : "Align lyrics"}
+          </Button>
+          {hasAlignment && (
+            <Button variant="secondary" size="sm" onClick={handleRealignWithAi} disabled={aiLoading}>
+              {aiLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
+              Re-align with AI
+            </Button>
+          )}
+        </div>
+        {aiError && <p className="text-xs text-red-600">{aiError}</p>}
       </div>
     </div>
   );

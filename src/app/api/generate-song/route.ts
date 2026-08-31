@@ -5,7 +5,6 @@ import { generateSongWithAi, OpenRouterConfigError, OpenRouterResponseError } fr
 
 const requestSchema = z.object({
   query: z.string().trim().min(2, "Tell us a song title, a lyric snippet, or a short description."),
-  targetLanguage: z.string().trim().optional().default(""),
 });
 
 export async function POST(request: Request) {
@@ -16,7 +15,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const aiResponse = await generateSongWithAi(parsed.data.query, parsed.data.targetLanguage);
+    const aiResponse = await generateSongWithAi(parsed.data.query);
     const song = aiResponseToSong(aiResponse);
     return NextResponse.json({ song });
   } catch (error) {

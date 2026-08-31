@@ -21,7 +21,7 @@ export function SongMetadataCard({ song }: { song: Song }) {
           </span>
         )}
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2">
         <div>
           <Label htmlFor="song-title">Title</Label>
           <Input
@@ -38,15 +38,6 @@ export function SongMetadataCard({ song }: { song: Song }) {
             value={song.artist}
             onChange={(e) => updateSong(song.id, { artist: e.target.value })}
             placeholder="Artist"
-          />
-        </div>
-        <div>
-          <Label htmlFor="song-key">Key</Label>
-          <Input
-            id="song-key"
-            value={song.key}
-            onChange={(e) => updateSong(song.id, { key: e.target.value })}
-            placeholder="e.g. G"
           />
         </div>
       </div>

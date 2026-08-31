@@ -13,35 +13,26 @@ export interface AlignedLine {
   sectionLabel?: string;
 }
 
-export interface LanguageBlock {
-  /** Free-text label, e.g. "English" or "Português". */
-  label: string;
-  /** Raw pasted/typed lyrics, blank-line separated into sections. */
-  raw: string;
-}
-
-export type ProLayout = "bilingual" | "languageA" | "languageB";
+/** Church only ever works in these two languages; every song pairs one against the other. */
+export type ChurchLanguage = "English" | "Português (Brasil)";
 
 export interface ExportOptions {
-  layout: ProLayout;
   linesPerSlide: number;
-  backgroundColor: string; // hex
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  layout: "bilingual",
   linesPerSlide: 2,
-  backgroundColor: "#000000",
 };
 
 export interface Song {
   id: string;
   title: string;
   artist: string;
-  key: string;
   mode: CreationMode;
-  languageA: LanguageBlock;
-  languageB: LanguageBlock;
+  /** Raw pasted/typed lyrics for Editor A, blank-line separated into sections. */
+  languageA: string;
+  /** Raw pasted/typed lyrics for Editor B, blank-line separated into sections. */
+  languageB: string;
   alignment: AlignedLine[];
   exportOptions: ExportOptions;
   /** Set by AI mode when the translation is a known/official version vs. machine-translated. */
@@ -56,10 +47,9 @@ export function createEmptySong(overrides?: Partial<Song>): Song {
     id: crypto.randomUUID(),
     title: "Untitled song",
     artist: "",
-    key: "",
     mode: "manual",
-    languageA: { label: "Language A", raw: "" },
-    languageB: { label: "Language B", raw: "" },
+    languageA: "",
+    languageB: "",
     alignment: [],
     exportOptions: { ...DEFAULT_EXPORT_OPTIONS },
     createdAt: now,

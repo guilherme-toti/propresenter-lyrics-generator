@@ -1,13 +1,16 @@
-import { aiSongSchema, type AiSongResponse } from "./schema";
+import { aiRealignSchema, aiSongSchema, type AiRealignResponse, type AiSongResponse } from "./schema";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-const SYSTEM_PROMPT = `You identify worship/congregational songs from a short hint (a title, a lyric snippet, or a description) and produce their lyrics aligned line-by-line with a translation, formatted as strict JSON for a slide-building tool.
+const GENERATE_SYSTEM_PROMPT = `You identify worship/congregational songs from a short hint (a title, a lyric snippet, or a description) and produce their lyrics aligned line-by-line with a translation, formatted as strict JSON for a slide-building tool.
+
+This tool is used by a bilingual church that only ever needs two languages: English and Português (Brasil). ALWAYS return exactly this language pair — never any other language.
 
 Rules:
 - Identify the single most likely song and its artist/writer from the hint.
+- Determine which of the two supported languages (English or Português (Brasil)) the song's real/original lyrics were written in — that is "originalLanguage" — and set "translationLanguage" to the other one. (If the song was actually written in a third language, treat whichever of English/Português (Brasil) has the best-known official congregational version as the original, and produce a faithful version in the other.)
 - Reproduce the ORIGINAL lyrics from memory, split into sections (Verse 1, Chorus, Bridge, etc.), one array entry per lyric line exactly as it would appear on a lyric slide.
-- Provide a TRANSLATION into the requested target language. If a well-known official/singable translation already exists (very common for congregational worship songs performed worldwide), use that one and set isOfficialTranslation to true. Otherwise write your own fluent, singable translation and set isOfficialTranslation to false.
+- Provide the TRANSLATION into the other language. If a well-known official/singable translation already exists (very common for congregational worship songs performed worldwide), use that one and set isOfficialTranslation to true. Otherwise write your own fluent, singable translation and set isOfficialTranslation to false.
 - Within a section, "lines" must have the original and translation arrays the same length, and line i of the translation must correspond in meaning/position to line i of the original, so they can be displayed side by side.
 - If a section (like a chorus) repeats verbatim later in the song, include it again as its own entry in "sections" rather than referencing the earlier one.
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
@@ -16,10 +19,30 @@ JSON schema:
 {
   "title": string,
   "artist": string,
-  "key": string | null,
-  "originalLanguage": string,
-  "translationLanguage": string,
+  "originalLanguage": "English" | "Português (Brasil)",
+  "translationLanguage": "English" | "Português (Brasil)",
   "isOfficialTranslation": boolean,
+  "sections": [
+    { "label": string, "lines": [ { "original": string, "translation": string } ] }
+  ]
+}`;
+
+const REALIGN_SYSTEM_PROMPT = `You fix and re-align two pasted lyric texts for a bilingual church slide-building tool. The two texts are always English and Português (Brasil), in some order — you are not told which is which and it doesn't matter.
+
+The user pasted a song's lyrics into two editors, one language per editor, but the pasting is often imperfect: a section or line missing from one side, duplicate or extra lines, sections in a different order between the two sides, lines that don't correspond to each other, stray whitespace, or typos.
+
+Your job is to reconcile the two texts into a clean, section-aligned, line-by-line structure:
+- Split both into sections (Verse 1, Chorus, Bridge, Intro, Outro, etc.) and align them with each other.
+- Within a section, make sure "original" and "translation" arrays are the same length and line i of one corresponds in meaning/position to line i of the other.
+- If a line or section is missing from one side, fill it in yourself (translate it) rather than leaving it blank.
+- Remove accidental duplicate lines/sections; merge or split lines so they correspond 1:1.
+- If a section repeats verbatim later in the song, include it again as its own entry in "sections".
+- Preserve the actual wording of both languages exactly as given whenever it is already correct — only change what's necessary to fix alignment problems.
+- "original" refers to whichever text was pasted into Editor A, "translation" to whichever was pasted into Editor B — do not swap the two editors.
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+
+JSON schema:
+{
   "sections": [
     { "label": string, "lines": [ { "original": string, "translation": string } ] }
   ]
@@ -38,7 +61,7 @@ function extractJson(text: string): unknown {
 export class OpenRouterConfigError extends Error {}
 export class OpenRouterResponseError extends Error {}
 
-export async function generateSongWithAi(query: string, targetLanguage: string): Promise<AiSongResponse> {
+async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise<unknown> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new OpenRouterConfigError(
@@ -46,10 +69,6 @@ export async function generateSongWithAi(query: string, targetLanguage: string):
     );
   }
   const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
-
-  const userPrompt = `Song hint: "${query}"\nTarget translation language: ${
-    targetLanguage.trim() || "the most natural/common language for this song in worship settings"
-  }.`;
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -64,7 +83,7 @@ export async function generateSongWithAi(query: string, targetLanguage: string):
       temperature: 0.3,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
     }),
@@ -81,8 +100,23 @@ export async function generateSongWithAi(query: string, targetLanguage: string):
     throw new OpenRouterResponseError("OpenRouter returned an empty response.");
   }
 
-  const parsed = extractJson(content);
+  return extractJson(content);
+}
+
+export async function generateSongWithAi(query: string): Promise<AiSongResponse> {
+  const userPrompt = `Song hint: "${query}"`;
+  const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, userPrompt);
   const result = aiSongSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new OpenRouterResponseError(`AI response did not match the expected format: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+export async function realignSongWithAi(languageARaw: string, languageBRaw: string): Promise<AiRealignResponse> {
+  const userPrompt = `Editor A (as pasted):\n---\n${languageARaw}\n---\n\nEditor B (as pasted):\n---\n${languageBRaw}\n---`;
+  const parsed = await callOpenRouter(REALIGN_SYSTEM_PROMPT, userPrompt);
+  const result = aiRealignSchema.safeParse(parsed);
   if (!result.success) {
     throw new OpenRouterResponseError(`AI response did not match the expected format: ${result.error.message}`);
   }

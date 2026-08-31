@@ -18,7 +18,6 @@ type Step = "choose" | "ai";
 export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   const [step, setStep] = useState<Step>("choose");
   const [query, setQuery] = useState("");
-  const [targetLanguage, setTargetLanguage] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const createSong = useLibraryStore((s) => s.createSong);
@@ -26,7 +25,6 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   const reset = () => {
     setStep("choose");
     setQuery("");
-    setTargetLanguage("");
     setError(null);
     setLoading(false);
   };
@@ -52,7 +50,7 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
       const res = await fetch("/api/generate-song", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, targetLanguage }),
+        body: JSON.stringify({ query }),
       });
       const data = await res.json();
       if (!res.ok) {
@@ -123,17 +121,9 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
             />
-          </div>
-
-          <div>
-            <Label htmlFor="ai-target-language">Target translation language (optional)</Label>
-            <Input
-              id="ai-target-language"
-              placeholder="e.g. Portuguese (Brazil) — leave blank to let the AI decide"
-              value={targetLanguage}
-              onChange={(e) => setTargetLanguage(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-            />
+            <p className="mt-1.5 text-xs text-ink/45">
+              We&apos;ll pair it with English and Português (Brasil) automatically.
+            </p>
           </div>
 
           {error && <p className="text-sm text-red-600">{error}</p>}

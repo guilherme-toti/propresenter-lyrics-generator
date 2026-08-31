@@ -1,5 +1,5 @@
 import { groupIntoSlides } from "@/lib/alignment";
-import type { AlignedLine, ExportOptions, Song } from "@/lib/types";
+import type { AlignedLine, Song } from "@/lib/types";
 import { buildEmptyNotesRtf, buildLyricsRtf, type RtfTextStyle } from "./rtf";
 
 const CANVAS_WIDTH = 1920;
@@ -15,18 +15,6 @@ function newUuid() {
 
 function nilUuid() {
   return { string: NIL_UUID };
-}
-
-function rgbFromHex(hex: string): { red: number; green: number; blue: number; alpha: number } {
-  const clean = hex.replace("#", "");
-  const value = clean.length === 3 ? clean.replace(/(.)/g, "$1$1") : clean;
-  const int = parseInt(value, 16);
-  return {
-    red: ((int >> 16) & 255) / 255,
-    green: ((int >> 8) & 255) / 255,
-    blue: (int & 255) / 255,
-    alpha: 1,
-  };
 }
 
 /** Mirrors the color convention common ProPresenter libraries use for section groups. */
@@ -92,13 +80,6 @@ function buildTextElement(lines: string[], spec: TextBoxSpec) {
   };
 }
 
-function layoutForOptions(layout: ExportOptions["layout"]): { showA: boolean; showB: boolean } {
-  return {
-    showA: layout === "bilingual" || layout === "languageA",
-    showB: layout === "bilingual" || layout === "languageB",
-  };
-}
-
 const STYLE_A: Omit<RtfTextStyle, "fontSizePt"> = {
   fontFamily: "Arial",
   color: { r: 255, g: 255, b: 255 },
@@ -113,59 +94,29 @@ const STYLE_B: Omit<RtfTextStyle, "fontSizePt"> = {
   alignment: "center",
 };
 
-function buildSlideElements(rows: AlignedLine[], options: ExportOptions) {
-  const { showA, showB } = layoutForOptions(options.layout);
-  const elements = [];
-
-  if (showA && showB) {
-    elements.push(
-      buildTextElement(rows.map((r) => r.a), {
-        name: "Language A",
-        x: MARGIN_X,
-        y: 60,
-        width: BOX_WIDTH,
-        height: 460,
-        style: { ...STYLE_A, fontSizePt: 72 },
-      }),
-    );
-    elements.push(
-      buildTextElement(rows.map((r) => r.b), {
-        name: "Language B",
-        x: MARGIN_X,
-        y: 560,
-        width: BOX_WIDTH,
-        height: 460,
-        style: { ...STYLE_B, fontSizePt: 54 },
-      }),
-    );
-  } else if (showA) {
-    elements.push(
-      buildTextElement(rows.map((r) => r.a), {
-        name: "Language A",
-        x: MARGIN_X,
-        y: 90,
-        width: BOX_WIDTH,
-        height: 900,
-        style: { ...STYLE_A, fontSizePt: 92 },
-      }),
-    );
-  } else {
-    elements.push(
-      buildTextElement(rows.map((r) => r.b), {
-        name: "Language B",
-        x: MARGIN_X,
-        y: 90,
-        width: BOX_WIDTH,
-        height: 900,
-        style: { ...STYLE_A, fontSizePt: 92 },
-      }),
-    );
-  }
-
-  return elements;
+/** Always renders both languages — the church only ever presents the bilingual pair. */
+function buildSlideElements(rows: AlignedLine[]) {
+  return [
+    buildTextElement(rows.map((r) => r.a), {
+      name: "Language A",
+      x: MARGIN_X,
+      y: 60,
+      width: BOX_WIDTH,
+      height: 460,
+      style: { ...STYLE_A, fontSizePt: 72 },
+    }),
+    buildTextElement(rows.map((r) => r.b), {
+      name: "Language B",
+      x: MARGIN_X,
+      y: 560,
+      width: BOX_WIDTH,
+      height: 460,
+      style: { ...STYLE_B, fontSizePt: 54 },
+    }),
+  ];
 }
 
-function buildCue(rows: AlignedLine[], options: ExportOptions) {
+function buildCue(rows: AlignedLine[]) {
   const label = rows.map((r) => r.a || r.b).join(" / ").slice(0, 80);
   return {
     uuid: newUuid(),
@@ -183,8 +134,9 @@ function buildCue(rows: AlignedLine[], options: ExportOptions) {
         slide: {
           presentation: {
             baseSlide: {
-              elements: buildSlideElements(rows, options),
-              backgroundColor: { alpha: 1 },
+              elements: buildSlideElements(rows),
+              // drawsBackgroundColor left false: slides stay transparent over whatever
+              // background/live layer is active in ProPresenter.
               size: { width: CANVAS_WIDTH, height: CANVAS_HEIGHT },
               uuid: newUuid(),
             },
@@ -222,7 +174,7 @@ export function buildPresentationObject(song: Song) {
   const cues: ReturnType<typeof buildCue>[] = [];
   const cueGroups = slideGroups.map((group) => {
     const cueIdentifiers = group.slides.map((rows) => {
-      const cue = buildCue(rows, song.exportOptions);
+      const cue = buildCue(rows);
       cues.push(cue);
       return { string: cue.uuid.string };
     });
@@ -249,7 +201,8 @@ export function buildPresentationObject(song: Song) {
     name: song.title || "Untitled song",
     lastDateUsed: { seconds: now },
     lastModifiedDate: { seconds: now },
-    background: { isEnabled: true, color: rgbFromHex(song.exportOptions.backgroundColor) },
+    // isEnabled left false: no document background — slides render fully transparent.
+    background: { isEnabled: false },
     selectedArrangement: nilUuid(),
     cueGroups,
     cues,
@@ -258,6 +211,5 @@ export function buildPresentationObject(song: Song) {
       author: song.artist || "",
       display: false,
     },
-    musicKey: song.key || "",
   };
 }

@@ -9,7 +9,7 @@ import {
   updateRowText,
   updateSectionLabel,
 } from "@/lib/alignment";
-import { createEmptySong, type Song } from "@/lib/types";
+import { createEmptySong, type AlignedLine, type Song } from "@/lib/types";
 
 interface LibraryState {
   songs: Song[];
@@ -24,6 +24,7 @@ interface LibraryState {
 
   setLanguageRaw: (id: string, side: "languageA" | "languageB", raw: string) => void;
   realignFromManualText: (id: string) => void;
+  applyAiRealignment: (id: string, result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] }) => void;
 
   editRow: (id: string, rowId: string, side: "a" | "b", value: string) => void;
   editSectionLabel: (id: string, rowId: string, label: string) => void;
@@ -75,14 +76,24 @@ export const useLibraryStore = create<LibraryState>()(
 
       setLanguageRaw: (id, side, raw) => {
         set((state) => ({
-          songs: state.songs.map((s) => (s.id === id ? touch({ ...s, [side]: { ...s[side], raw } }) : s)),
+          songs: state.songs.map((s) => (s.id === id ? touch({ ...s, [side]: raw }) : s)),
         }));
       },
 
       realignFromManualText: (id) => {
         set((state) => ({
           songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: buildAlignmentFromManual(s.languageA.raw, s.languageB.raw) }) : s,
+            s.id === id ? touch({ ...s, alignment: buildAlignmentFromManual(s.languageA, s.languageB) }) : s,
+          ),
+        }));
+      },
+
+      applyAiRealignment: (id, result) => {
+        set((state) => ({
+          songs: state.songs.map((s) =>
+            s.id === id
+              ? touch({ ...s, languageA: result.languageARaw, languageB: result.languageBRaw, alignment: result.alignment })
+              : s,
           ),
         }));
       },

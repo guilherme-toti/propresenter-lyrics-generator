@@ -133,8 +133,8 @@ export function AlignmentPreview({ song }: { song: Song }) {
       </div>
 
       <div className="flex gap-0 border-b border-line pb-2 text-[11px] font-semibold uppercase tracking-widest text-ink/40">
-        <span className="flex-1 px-3">{song.languageA.label}</span>
-        <span className="flex-1 px-3">{song.languageB.label}</span>
+        <span className="flex-1 px-3">Editor A</span>
+        <span className="flex-1 px-3">Editor B</span>
         <span className="w-[168px] shrink-0" />
       </div>
 
