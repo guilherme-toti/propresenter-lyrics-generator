@@ -12,9 +12,9 @@ export function SongMetadataCard({ song }: { song: Song }) {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Detalhes da música</p>
+        <p className="text-[13px] font-semibold uppercase tracking-widest text-ink/45">Detalhes da música</p>
         {song.mode === "ai" && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
+          <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[12px] font-semibold text-accent">
             <Sparkles size={11} />
             Gerado por IA
             {song.isOfficialTranslation ? " · tradução oficial" : " · tradução por IA"}

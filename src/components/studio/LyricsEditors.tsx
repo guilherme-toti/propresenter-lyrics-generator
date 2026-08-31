@@ -37,7 +37,7 @@ function EditorPanel({
         onChange={(e) => onRawChange(side, e.target.value)}
         placeholder="Cole a letra aqui. Deixe uma linha em branco entre as seções (verso, refrão, ponte…)."
       />
-      <div className="mt-2 flex gap-2 text-[11px] text-ink/45">
+      <div className="mt-2 flex gap-2 text-[13px] text-ink/45">
         <span className="rounded-full border border-line px-2 py-0.5">Linhas: {stats.lines}</span>
         <span className="rounded-full border border-line px-2 py-0.5">Seções: {stats.sections}</span>
       </div>

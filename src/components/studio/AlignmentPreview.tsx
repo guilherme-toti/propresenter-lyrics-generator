@@ -16,7 +16,7 @@ function SectionDivider({ song, row }: { song: Song; row: AlignedLine }) {
         value={row.sectionLabel ?? ""}
         onChange={(e) => editSectionLabel(song.id, row.id, e.target.value)}
         placeholder="Seção"
-        className="!w-auto border-0 bg-transparent !py-0.5 text-[11px] font-semibold uppercase tracking-widest text-white placeholder:text-white/50 focus:ring-0"
+        className="!w-auto border-0 bg-transparent !py-0.5 text-[13px] font-semibold uppercase tracking-widest text-white placeholder:text-white/50 focus:ring-0"
       />
     </div>
   );
@@ -111,7 +111,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Pré-visualização do alinhamento</p>
+          <p className="text-[13px] font-semibold uppercase tracking-widest text-ink/45">Pré-visualização do alinhamento</p>
           <h3 className="font-display text-lg font-semibold text-ink">Alinhe a letra</h3>
         </div>
         <label className="flex items-center gap-2 text-xs text-ink/60">
@@ -132,7 +132,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
         </label>
       </div>
 
-      <div className="flex gap-0 border-b border-line pb-2 text-[11px] font-semibold uppercase tracking-widest text-ink/40">
+      <div className="flex gap-0 border-b border-line pb-2 text-[13px] font-semibold uppercase tracking-widest text-ink/40">
         <span className="flex-1 px-3">Português</span>
         <span className="flex-1 px-3">Inglês</span>
         <span className="w-[168px] shrink-0" />

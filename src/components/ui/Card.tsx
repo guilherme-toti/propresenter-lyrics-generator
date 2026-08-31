@@ -7,6 +7,6 @@ export function Card({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
 
 export function CardLabel({ className, ...props }: HTMLAttributes<HTMLParagraphElement>) {
   return (
-    <p className={cn("text-[11px] font-semibold uppercase tracking-widest text-ink/45", className)} {...props} />
+    <p className={cn("text-[13px] font-semibold uppercase tracking-widest text-ink/45", className)} {...props} />
   );
 }

@@ -1,20 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { MoreVertical, Plus, Sparkles, Trash2 } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { useLibraryStore } from "@/lib/store";
-
-function timeAgo(timestamp: number): string {
-  const diffMs = Date.now() - timestamp;
-  const minutes = Math.floor(diffMs / 60000);
-  if (minutes < 1) return "agora mesmo";
-  if (minutes < 60) return `há ${minutes}min`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `há ${hours}h`;
-  const days = Math.floor(hours / 24);
-  return `há ${days}d`;
-}
 
 interface LibrarySidebarProps {
   open: boolean;
@@ -28,6 +17,20 @@ export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
   const deleteSong = useLibraryStore((s) => s.deleteSong);
   const [menuOpenFor, setMenuOpenFor] = useState<string | null>(null);
 
+  // Close the options menu on any click outside it (the trigger button included, so the toggle
+  // click itself isn't immediately undone by this same handler).
+  useEffect(() => {
+    if (!menuOpenFor) return;
+    const handlePointerDown = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (!target.closest(`[data-song-menu="${menuOpenFor}"]`)) {
+        setMenuOpenFor(null);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [menuOpenFor]);
+
   return (
     <div
       className={cn(
@@ -35,16 +38,16 @@ export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
         open ? "w-72 border-r" : "w-0",
       )}
     >
-      <div className="flex h-full w-72 flex-col p-3">
+      <div className="flex h-full w-72 flex-col p-3 pt-6">
         <button
           onClick={onNewProject}
-          className="mb-3 flex items-center gap-2 self-start rounded-full bg-ink/5 px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-ink/10"
+          className="mb-8 flex items-center gap-2 self-start rounded-full bg-ink/5 px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-ink/10"
         >
           <Plus size={16} />
           Novo projeto
         </button>
 
-        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-widest text-ink/40">Recentes</p>
+        <p className="mb-1 px-3 text-[13px] font-semibold uppercase tracking-widest text-ink/40">Recentes</p>
 
         <div className="flex-1 space-y-0.5 overflow-y-auto">
           {songs.length === 0 && (
@@ -56,21 +59,21 @@ export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
           {songs.map((song) => (
             <div
               key={song.id}
+              data-song-menu={song.id}
               className={cn(
                 "group relative rounded-lg px-3 py-2 transition-colors",
                 song.id === activeSongId ? "bg-ink/8" : "hover:bg-ink/5",
               )}
             >
-              <button className="flex w-full flex-col items-start text-left" onClick={() => selectSong(song.id)}>
+              <button className="flex w-full items-center text-left" onClick={() => selectSong(song.id)}>
                 <span className="flex w-full items-center gap-1.5">
                   {song.mode === "ai" && <Sparkles size={12} className="shrink-0 text-accent" />}
                   <span className="truncate text-sm font-medium text-ink">{song.title || "Música sem título"}</span>
                 </span>
-                <span className="mt-0.5 text-[11px] text-ink/45">{timeAgo(song.updatedAt)}</span>
               </button>
 
               <button
-                className="absolute right-2 top-2 rounded-md p-1 text-ink/30 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/70 group-hover:opacity-100"
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md p-1 text-ink/30 opacity-0 transition-opacity hover:bg-ink/5 hover:text-ink/70 group-hover:opacity-100"
                 onClick={() => setMenuOpenFor((current) => (current === song.id ? null : song.id))}
                 aria-label="Opções da música"
               >
