@@ -75,10 +75,12 @@ function AlignmentRow({ song, row, isSlideBreak }: { song: Song; row: AlignedLin
 }
 
 function cnRow(isSlideBreak: boolean) {
-  return [
-    "group flex items-stretch rounded-lg border bg-white",
-    isSlideBreak ? "border-t-2 border-t-plum/30 border-line" : "border-line",
-  ].join(" ");
+  if (isSlideBreak) {
+    // Each side's color is set individually (rather than the "border" + "border-line" shorthand)
+    // so border-t-plum isn't fighting border-line for the top edge's color in the cascade.
+    return "group mt-1 flex items-stretch rounded-lg border-r border-b border-l border-r-line border-b-line border-l-line border-t-4 border-t-plum bg-white";
+  }
+  return "group flex items-stretch rounded-lg border border-line bg-white";
 }
 
 function cnIconBtn(active: boolean) {

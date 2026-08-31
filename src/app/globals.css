@@ -40,11 +40,19 @@
   --text-2xl--line-height: 2.125rem;
 }
 
-body {
-  background: var(--color-cream-50);
-  color: var(--color-ink);
-}
+/*
+ * These base-level defaults must live inside Tailwind's own @layer base: unlayered CSS always
+ * wins over ANY layered rule regardless of selector specificity, so a plain `* { border-color }`
+ * here would silently defeat every border-color utility in the app (border-t-*, hover:, etc.)
+ * instead of just supplying a fallback for elements that don't set one.
+ */
+@layer base {
+  body {
+    background: var(--color-cream-50);
+    color: var(--color-ink);
+  }
 
-* {
-  border-color: var(--color-line);
+  * {
+    border-color: var(--color-line);
+  }
 }
