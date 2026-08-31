@@ -22,7 +22,7 @@ function SectionDivider({ song, row }: { song: Song; row: AlignedLine }) {
   );
 }
 
-function AlignmentRow({ song, row, isSlideBreak }: { song: Song; row: AlignedLine; isSlideBreak: boolean }) {
+function AlignmentRow({ song, row }: { song: Song; row: AlignedLine }) {
   const editRow = useLibraryStore((s) => s.editRow);
   const addRowAfter = useLibraryStore((s) => s.addRowAfter);
   const removeRow = useLibraryStore((s) => s.removeRow);
@@ -30,9 +30,7 @@ function AlignmentRow({ song, row, isSlideBreak }: { song: Song; row: AlignedLin
   const toggleRowSectionBreak = useLibraryStore((s) => s.toggleRowSectionBreak);
 
   return (
-    <div
-      className={cnRow(isSlideBreak)}
-    >
+    <div className="group flex items-stretch bg-white">
       <input
         value={row.a}
         onChange={(e) => editRow(song.id, row.id, "a", e.target.value)}
@@ -72,15 +70,6 @@ function AlignmentRow({ song, row, isSlideBreak }: { song: Song; row: AlignedLin
       </div>
     </div>
   );
-}
-
-function cnRow(isSlideBreak: boolean) {
-  if (isSlideBreak) {
-    // Each side's color is set individually (rather than the "border" + "border-line" shorthand)
-    // so border-t-plum isn't fighting border-line for the top edge's color in the cascade.
-    return "group mt-1 flex items-stretch rounded-lg border-r border-b border-l border-r-line border-b-line border-l-line border-t-4 border-t-plum bg-white";
-  }
-  return "group flex items-stretch rounded-lg border border-line bg-white";
 }
 
 function cnIconBtn(active: boolean) {
@@ -140,15 +129,20 @@ export function AlignmentPreview({ song }: { song: Song }) {
         <span className="w-[168px] shrink-0" />
       </div>
 
-      <div className="mt-2 space-y-1.5">
-        {slideChunks.map((chunk) =>
-          chunk.map((row, rowIndexInChunk) => (
-            <Fragment key={row.id}>
-              {row.sectionBreakBefore && <SectionDivider song={song} row={row} />}
-              <AlignmentRow song={song} row={row} isSlideBreak={rowIndexInChunk === 0 && !row.sectionBreakBefore} />
+      <div className="mt-2 space-y-2">
+        {slideChunks.map((chunk) => {
+          const firstRow = chunk[0];
+          return (
+            <Fragment key={firstRow.id}>
+              {firstRow.sectionBreakBefore && <SectionDivider song={song} row={firstRow} />}
+              <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
+                {chunk.map((row) => (
+                  <AlignmentRow key={row.id} song={song} row={row} />
+                ))}
+              </div>
             </Fragment>
-          )),
-        )}
+          );
+        })}
       </div>
     </Card>
   );
