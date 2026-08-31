@@ -19,7 +19,7 @@ export const songSchema = z.object({
   mode: z.enum(["ai", "manual"]),
   languageA: z.string(),
   languageB: z.string(),
-  alignment: z.array(alignedLineSchema).min(1, "Add at least one aligned line before exporting."),
+  alignment: z.array(alignedLineSchema).min(1, "Alinhe pelo menos uma linha antes de exportar."),
   exportOptions: exportOptionsSchema,
   isOfficialTranslation: z.boolean().optional(),
   createdAt: z.number(),

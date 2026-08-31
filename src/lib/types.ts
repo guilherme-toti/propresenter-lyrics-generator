@@ -45,7 +45,7 @@ export function createEmptySong(overrides?: Partial<Song>): Song {
   const now = Date.now();
   return {
     id: crypto.randomUUID(),
-    title: "Untitled song",
+    title: "Música sem título",
     artist: "",
     mode: "manual",
     languageA: "",

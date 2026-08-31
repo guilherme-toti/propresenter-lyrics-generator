@@ -10,14 +10,14 @@ const requestSchema = z
     languageBRaw: z.string(),
   })
   .refine((data) => data.languageARaw.trim().length > 0 || data.languageBRaw.trim().length > 0, {
-    message: "Add lyrics to at least one editor before using AI re-align.",
+    message: "Adicione a letra em pelo menos um editor antes de realinhar com IA.",
   });
 
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid request." }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Requisição inválida." }, { status: 400 });
   }
 
   try {
@@ -34,6 +34,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 502 });
     }
     console.error("realign-song failed", error);
-    return NextResponse.json({ error: "Something went wrong re-aligning this song. Please try again." }, { status: 500 });
+    return NextResponse.json({ error: "Algo deu errado ao realinhar esta música. Tente novamente." }, { status: 500 });
   }
 }

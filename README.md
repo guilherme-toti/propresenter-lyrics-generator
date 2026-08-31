@@ -1,13 +1,13 @@
-# Lyrics Studio
+# Poiema Lyrics Studio
 
-Turn a song into a bilingual, line-by-line lyric alignment and export it straight to a ProPresenter 7 `.pro` file — no PDF, no manual re-typing in ProPresenter.
+Turn a song into a bilingual (Português/English), line-by-line lyric alignment and export it straight to a ProPresenter 7 `.pro` file — no PDF, no manual re-typing in ProPresenter. Built for a church that only ever presents in these two languages: Editor A is always Português, Editor B is always English.
 
 ## How it works
 
 Every project goes through the same pipeline — **align → preview → export** — but there are two ways to get to the alignment:
 
-- **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song, recalls its lyrics, and produces (or finds) a translation, already split into sections and aligned line-by-line. You land straight on the alignment preview to review before exporting.
-- **Create manually** — paste the original lyrics into Editor A and the translation into Editor B (blank line = new section), then click "Align lyrics" to pair them line-by-line and section-by-section, editable afterwards.
+- **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song, recalls its lyrics, and produces (or finds) a Português/English translation pair, already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting.
+- **Create manually** — paste one language into Editor A and the other into Editor B (blank line = new section), then click "Alinhar letra" to pair them line-by-line and section-by-section, editable afterwards. Once aligned, "Realinhar com IA" can send both texts back through the LLM to fix missing lines, duplicates, or misalignment.
 
 From there, both flows share the same alignment editor (reorder, split, merge, or retitle any section) and the same **Export → .pro** step, which builds a real ProPresenter 7 presentation: one slide per group of N lines, grouped into ProPresenter slide groups per section, with the song's CCLI/title/artist/key metadata attached.
 

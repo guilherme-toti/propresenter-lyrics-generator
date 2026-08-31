@@ -44,7 +44,7 @@ export function Modal({ open, onClose, title, className, children }: ModalProps)
           <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
           <button
             onClick={onClose}
-            aria-label="Close"
+            aria-label="Fechar"
             className="rounded-full p-1.5 text-ink/50 transition-colors hover:bg-ink/5 hover:text-ink"
           >
             <X size={18} />

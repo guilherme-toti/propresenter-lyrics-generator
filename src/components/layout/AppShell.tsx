@@ -15,7 +15,7 @@ export function AppShell() {
 
   if (!mounted) {
     return (
-      <div className="flex min-h-screen flex-col">
+      <div className="flex h-screen flex-col overflow-hidden">
         <Header />
         <div className="flex flex-1" />
       </div>
@@ -23,7 +23,7 @@ export function AppShell() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
+    <div className="flex h-screen flex-col overflow-hidden">
       <Header />
       <div className="flex flex-1 overflow-hidden">
         <LibrarySidebar onNewProject={() => setDialogOpen(true)} />

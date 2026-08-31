@@ -15,7 +15,7 @@ function SectionDivider({ song, row }: { song: Song; row: AlignedLine }) {
       <Input
         value={row.sectionLabel ?? ""}
         onChange={(e) => editSectionLabel(song.id, row.id, e.target.value)}
-        placeholder="Section"
+        placeholder="Seção"
         className="!w-auto border-0 bg-transparent !py-0.5 text-[11px] font-semibold uppercase tracking-widest text-white placeholder:text-white/50 focus:ring-0"
       />
     </div>
@@ -47,23 +47,23 @@ function AlignmentRow({ song, row, isSlideBreak }: { song: Song; row: AlignedLin
       />
       <div className="flex shrink-0 items-center gap-0.5 border-l border-line px-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
-          title="Start a new section here"
+          title="Iniciar uma nova seção aqui"
           onClick={() => toggleRowSectionBreak(song.id, row.id)}
           className={cnIconBtn(row.sectionBreakBefore)}
         >
           <Scissors size={12} />
         </button>
-        <button title="Move up" onClick={() => moveRowInSong(song.id, row.id, "up")} className={cnIconBtn(false)}>
+        <button title="Mover para cima" onClick={() => moveRowInSong(song.id, row.id, "up")} className={cnIconBtn(false)}>
           <ArrowUp size={12} />
         </button>
-        <button title="Move down" onClick={() => moveRowInSong(song.id, row.id, "down")} className={cnIconBtn(false)}>
+        <button title="Mover para baixo" onClick={() => moveRowInSong(song.id, row.id, "down")} className={cnIconBtn(false)}>
           <ArrowDown size={12} />
         </button>
-        <button title="Insert row below" onClick={() => addRowAfter(song.id, row.id)} className={cnIconBtn(false)}>
+        <button title="Inserir linha abaixo" onClick={() => addRowAfter(song.id, row.id)} className={cnIconBtn(false)}>
           <Plus size={12} />
         </button>
         <button
-          title="Delete row"
+          title="Excluir linha"
           onClick={() => removeRow(song.id, row.id)}
           className={cnIconBtn(false) + " hover:!bg-red-50 hover:!text-red-600"}
         >
@@ -101,7 +101,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
     return (
       <Card>
         <p className="text-sm text-ink/50">
-          Nothing aligned yet. Paste lyrics into both editors above and click “Align lyrics”.
+          Nada alinhado ainda. Cole a letra nos dois editores acima e clique em “Alinhar letra”.
         </p>
       </Card>
     );
@@ -111,11 +111,11 @@ export function AlignmentPreview({ song }: { song: Song }) {
     <Card>
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Alignment preview</p>
-          <h3 className="font-display text-lg font-semibold text-ink">Line up the lyrics</h3>
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Pré-visualização do alinhamento</p>
+          <h3 className="font-display text-lg font-semibold text-ink">Alinhe a letra</h3>
         </div>
         <label className="flex items-center gap-2 text-xs text-ink/60">
-          Slide breaks every
+          Novo slide a cada
           <input
             type="number"
             min={1}
@@ -128,7 +128,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
             }
             className="w-14 rounded-md border border-line bg-white px-2 py-1 text-center text-xs"
           />
-          lines
+          linhas
         </label>
       </div>
 

@@ -17,16 +17,22 @@ function nilUuid() {
   return { string: NIL_UUID };
 }
 
-/** Mirrors the color convention common ProPresenter libraries use for section groups. */
+/**
+ * Mirrors the color convention common ProPresenter libraries use for section groups. Labels are
+ * usually Portuguese ("Refrão", "Ponte", "Introdução", "Verso"...) but English ones are matched
+ * too, since manually-typed or AI section labels can still come through in either language.
+ */
 function sectionColor(label: string): { red: number; green: number; blue: number; alpha: number } {
   const key = label.toLowerCase();
-  if (key.includes("chorus")) return { red: 0.8, green: 0, blue: 0.3059, alpha: 1 };
-  if (key.includes("bridge")) return { red: 0.4627, green: 0, blue: 0.8, alpha: 1 };
+  if (key.includes("refrão") || key.includes("refrao") || key.includes("chorus")) {
+    return { red: 0.8, green: 0, blue: 0.3059, alpha: 1 };
+  }
+  if (key.includes("ponte") || key.includes("bridge")) return { red: 0.4627, green: 0, blue: 0.8, alpha: 1 };
   if (key.includes("intro")) return { red: 0, green: 0.8, blue: 0.4, alpha: 1 };
-  if (key.includes("outro") || key.includes("ending") || key.includes("tag")) {
+  if (key.includes("outro") || key.includes("final") || key.includes("ending") || key.includes("tag")) {
     return { red: 0.8, green: 0.4, blue: 0, alpha: 1 };
   }
-  if (key.includes("verse")) return { red: 0, green: 0.4667, blue: 0.8, alpha: 1 };
+  if (key.includes("verso") || key.includes("verse")) return { red: 0, green: 0.4667, blue: 0.8, alpha: 1 };
   return { red: 0.5, green: 0.5, blue: 0.5, alpha: 1 };
 }
 
@@ -158,7 +164,7 @@ function groupSlidesIntoSections(slideChunks: AlignedLine[][]): SlideGroup[] {
   slideChunks.forEach((chunk, index) => {
     const first = chunk[0];
     if ((first?.sectionBreakBefore && index > 0) || groups.length === 0) {
-      groups.push({ label: first?.sectionLabel ?? `Section ${groups.length + 1}`, slides: [chunk] });
+      groups.push({ label: first?.sectionLabel ?? `Seção ${groups.length + 1}`, slides: [chunk] });
     } else {
       groups[groups.length - 1].slides.push(chunk);
     }
@@ -198,7 +204,7 @@ export function buildPresentationObject(song: Song) {
       applicationVersion: { majorVersion: 7, minorVersion: 16, patchVersion: 2, build: "1" },
     },
     uuid: newUuid(),
-    name: song.title || "Untitled song",
+    name: song.title || "Música sem título",
     lastDateUsed: { seconds: now },
     lastModifiedDate: { seconds: now },
     // isEnabled left false: no document background — slides render fully transparent.

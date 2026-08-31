@@ -14,14 +14,14 @@ function EmptyState({ onNewProject }: { onNewProject: () => void }) {
       <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10 text-accent">
         <Sparkles size={22} />
       </div>
-      <h2 className="font-display text-2xl font-semibold text-ink">Start your first project</h2>
+      <h2 className="font-display text-2xl font-semibold text-ink">Comece seu primeiro projeto</h2>
       <p className="max-w-sm text-sm text-ink/55">
-        Let AI find a song and its translation, or paste lyrics in two languages yourself — either way you&apos;ll
-        get a line-by-line alignment ready to export to ProPresenter.
+        Deixe a IA encontrar uma música e sua tradução, ou cole a letra em dois idiomas você mesmo — de qualquer
+        forma você terá um alinhamento linha a linha pronto para exportar para o ProPresenter.
       </p>
       <Button className="mt-2" onClick={onNewProject}>
         <Sparkles size={16} />
-        New project
+        Novo projeto
       </Button>
     </div>
   );

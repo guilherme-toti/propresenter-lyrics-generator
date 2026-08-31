@@ -19,13 +19,13 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lyrics Studio — bilingual lyrics for ProPresenter",
-  description: "Generate bilingual lyric alignments with AI and export them straight to ProPresenter 7.",
+  title: "Poiema Lyrics Studio — letras bilíngues para o ProPresenter",
+  description: "Gere alinhamentos de letras bilíngues com IA e exporte direto para o ProPresenter 7.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${inter.variable} ${fraunces.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="pt-BR" className={`${inter.variable} ${fraunces.variable} ${geistMono.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-sans bg-cream-50 text-ink">{children}</body>
     </html>
   );

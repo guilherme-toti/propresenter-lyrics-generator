@@ -6,7 +6,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = songSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Invalid song." }, { status: 400 });
+    return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Música inválida." }, { status: 400 });
   }
 
   try {
@@ -21,6 +21,6 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     console.error("propresenter export failed", error);
-    return NextResponse.json({ error: "Failed to build the ProPresenter file." }, { status: 500 });
+    return NextResponse.json({ error: "Falha ao gerar o arquivo do ProPresenter." }, { status: 500 });
   }
 }

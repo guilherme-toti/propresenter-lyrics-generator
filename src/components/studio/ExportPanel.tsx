@@ -22,12 +22,12 @@ export function ExportPanel({ song }: { song: Song }) {
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? "Export failed.");
+        throw new Error(data.error ?? "Falha ao exportar.");
       }
       const blob = await res.blob();
       const disposition = res.headers.get("Content-Disposition") ?? "";
       const match = /filename="?([^"]+)"?/.exec(disposition);
-      const filename = match ? decodeURIComponent(match[1]) : `${song.title || "song"}.pro`;
+      const filename = match ? decodeURIComponent(match[1]) : `${song.title || "musica"}.pro`;
 
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -39,28 +39,28 @@ export function ExportPanel({ song }: { song: Song }) {
       URL.revokeObjectURL(url);
       setStatus("idle");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Export failed.");
+      setError(err instanceof Error ? err.message : "Falha ao exportar.");
       setStatus("error");
     }
   };
 
   return (
     <Card>
-      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink/45">Export</p>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-widest text-ink/45">Exportar</p>
       <h3 className="mb-1 font-display text-lg font-semibold text-ink">ProPresenter 7</h3>
       <p className="mb-4 text-xs text-ink/45">
-        Exports a self-contained <code className="rounded bg-ink/5 px-1">.pro</code> file with both languages on
-        every slide and a transparent background — one slide per group of {song.exportOptions.linesPerSlide} line
-        {song.exportOptions.linesPerSlide === 1 ? "" : "s"}, grouped into ProPresenter slide groups by section.
+        Exporta um arquivo <code className="rounded bg-ink/5 px-1">.pro</code> autocontido com os dois idiomas em
+        cada slide e fundo transparente — um slide para cada grupo de {song.exportOptions.linesPerSlide} linha
+        {song.exportOptions.linesPerSlide === 1 ? "" : "s"}, agrupados em grupos de slide do ProPresenter por seção.
       </p>
 
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
       <Button onClick={handleExport} disabled={!canExport || status === "loading"}>
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
-        Export .pro
+        Exportar .pro
       </Button>
-      {!canExport && <p className="mt-2 text-xs text-ink/40">Align at least one line before exporting.</p>}
+      {!canExport && <p className="mt-2 text-xs text-ink/40">Alinhe pelo menos uma linha antes de exportar.</p>}
     </Card>
   );
 }

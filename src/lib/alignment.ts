@@ -15,7 +15,7 @@ export function splitIntoBlocks(raw: string): string[][] {
 }
 
 /**
- * Labels blocks sequentially as "Verse 1", "Verse 2", ... but reuses "Chorus" (and "Chorus 2", etc.)
+ * Labels blocks sequentially as "Verso 1", "Verso 2", ... but reuses "Refrão" (and "Refrão 2", etc.)
  * whenever a block's text exactly repeats an earlier block, since that's the common shape of a song.
  */
 export function labelSections(blocks: string[][]): string[] {
@@ -37,13 +37,13 @@ export function labelSections(blocks: string[][]): string[] {
       let chorusLabel = chorusLabelForKey.get(key);
       if (!chorusLabel) {
         chorusCount += 1;
-        chorusLabel = chorusCount === 1 ? "Chorus" : `Chorus ${chorusCount}`;
+        chorusLabel = chorusCount === 1 ? "Refrão" : `Refrão ${chorusCount}`;
         chorusLabelForKey.set(key, chorusLabel);
       }
       return chorusLabel;
     }
     verseCount += 1;
-    return `Verse ${verseCount}`;
+    return `Verso ${verseCount}`;
   });
 }
 
@@ -74,7 +74,7 @@ export function buildAlignmentFromManual(rawA: string, rawB: string): AlignedLin
         a: pair.a,
         b: pair.b,
         sectionBreakBefore: j === 0,
-        sectionLabel: j === 0 ? (labels[i] ?? `Section ${i + 1}`) : undefined,
+        sectionLabel: j === 0 ? (labels[i] ?? `Seção ${i + 1}`) : undefined,
       });
     });
   }
@@ -165,7 +165,7 @@ export function toggleSectionBreak(rows: AlignedLine[], id: string): AlignedLine
       ? {
           ...row,
           sectionBreakBefore: !row.sectionBreakBefore,
-          sectionLabel: !row.sectionBreakBefore ? (row.sectionLabel ?? "Section") : undefined,
+          sectionLabel: !row.sectionBreakBefore ? (row.sectionLabel ?? "Seção") : undefined,
         }
       : row,
   );

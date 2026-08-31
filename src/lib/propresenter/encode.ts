@@ -11,6 +11,6 @@ export async function encodeSongAsProFile(song: Song): Promise<Buffer> {
 }
 
 export function proFileName(song: Song): string {
-  const safe = (song.title || "Untitled song").replace(/[\\/:*?"<>|]/g, "").trim() || "Untitled song";
+  const safe = (song.title || "Música sem título").replace(/[\\/:*?"<>|]/g, "").trim() || "Música sem título";
   return `${safe}.pro`;
 }

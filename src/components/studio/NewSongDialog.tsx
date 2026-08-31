@@ -41,7 +41,7 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
 
   const handleGenerate = async () => {
     if (query.trim().length < 2) {
-      setError("Tell us a song title, a lyric snippet, or a short description.");
+      setError("Digite o título de uma música, um trecho da letra ou uma breve descrição.");
       return;
     }
     setLoading(true);
@@ -54,19 +54,19 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? "Something went wrong.");
+        throw new Error(data.error ?? "Algo deu errado.");
       }
       createSong(data.song as Song);
       handleClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong.");
+      setError(err instanceof Error ? err.message : "Algo deu errado.");
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="New project">
+    <Modal open={open} onClose={handleClose} title="Novo projeto">
       {step === "choose" && (
         <div className="grid gap-3 sm:grid-cols-2">
           <button
@@ -74,15 +74,15 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
             className="group flex flex-col items-start gap-2 rounded-xl border-2 border-accent/50 bg-accent/5 p-4 text-left transition-colors hover:border-accent"
           >
             <span className="inline-flex items-center gap-1 rounded-full bg-accent px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
-              Recommended
+              Recomendado
             </span>
             <span className="mt-1 flex items-center gap-2 font-display text-base font-semibold text-ink">
               <Sparkles size={16} className="text-accent" />
-              Generate with AI
+              Gerar com IA
             </span>
             <span className="text-xs text-ink/60">
-              Give us a title, a lyric snippet, or a description. We&apos;ll find the song and its translation, and
-              line them up for you.
+              Digite um título, um trecho da letra ou uma descrição. Vamos encontrar a música e sua tradução, e
+              alinhar tudo para você.
             </span>
           </button>
 
@@ -92,10 +92,10 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
           >
             <span className="flex items-center gap-2 font-display text-base font-semibold text-ink">
               <PenLine size={16} className="text-ink/60" />
-              Create manually
+              Criar manualmente
             </span>
             <span className="text-xs text-ink/60">
-              Paste the lyrics for each language yourself and align them line by line.
+              Cole a letra de cada idioma você mesmo e alinhe linha por linha.
             </span>
           </button>
         </div>
@@ -108,21 +108,21 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
             className="inline-flex items-center gap-1 text-xs font-medium text-ink/50 hover:text-ink"
           >
             <ArrowLeft size={13} />
-            Back
+            Voltar
           </button>
 
           <div>
-            <Label htmlFor="ai-query">Song title, lyric snippet, or description</Label>
+            <Label htmlFor="ai-query">Título da música, trecho da letra ou descrição</Label>
             <Input
               id="ai-query"
               autoFocus
-              placeholder={'e.g. "Oceans (Where Feet May Fail) by Hillsong" or a few lines of lyrics'}
+              placeholder={'ex.: "Oceans (Where Feet May Fail), do Hillsong" ou algumas linhas da letra'}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
             />
             <p className="mt-1.5 text-xs text-ink/45">
-              We&apos;ll pair it with English and Português (Brasil) automatically.
+              Vamos parear automaticamente com português (Brasil) e inglês.
             </p>
           </div>
 
@@ -132,12 +132,12 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
             {loading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
-                Finding the song…
+                Buscando a música…
               </>
             ) : (
               <>
                 <Sparkles size={16} />
-                Generate
+                Gerar
               </>
             )}
           </Button>

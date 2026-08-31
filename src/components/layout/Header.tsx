@@ -7,8 +7,8 @@ export function Header() {
         <Music2 size={16} />
       </div>
       <div className="leading-tight">
-        <p className="font-display text-base font-semibold text-ink">Lyrics Studio</p>
-        <p className="text-[11px] text-ink/45">Bilingual lyrics → ProPresenter</p>
+        <p className="font-display text-base font-semibold text-ink">Poiema Lyrics Studio</p>
+        <p className="text-[11px] text-ink/45">Letras bilíngues → ProPresenter</p>
       </div>
     </header>
   );

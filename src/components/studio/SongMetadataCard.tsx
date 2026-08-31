@@ -12,32 +12,32 @@ export function SongMetadataCard({ song }: { song: Song }) {
   return (
     <Card>
       <div className="mb-3 flex items-center justify-between">
-        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Song details</p>
+        <p className="text-[11px] font-semibold uppercase tracking-widest text-ink/45">Detalhes da música</p>
         {song.mode === "ai" && (
           <span className="inline-flex items-center gap-1 rounded-full bg-accent/10 px-2 py-0.5 text-[10px] font-semibold text-accent">
             <Sparkles size={11} />
-            AI generated
-            {song.isOfficialTranslation ? " · official translation" : " · AI translation"}
+            Gerado por IA
+            {song.isOfficialTranslation ? " · tradução oficial" : " · tradução por IA"}
           </span>
         )}
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <div>
-          <Label htmlFor="song-title">Title</Label>
+          <Label htmlFor="song-title">Título</Label>
           <Input
             id="song-title"
             value={song.title}
             onChange={(e) => updateSong(song.id, { title: e.target.value })}
-            placeholder="Song title"
+            placeholder="Título da música"
           />
         </div>
         <div>
-          <Label htmlFor="song-artist">Artist</Label>
+          <Label htmlFor="song-artist">Artista</Label>
           <Input
             id="song-artist"
             value={song.artist}
             onChange={(e) => updateSong(song.id, { artist: e.target.value })}
-            placeholder="Artist"
+            placeholder="Artista"
           />
         </div>
       </div>
