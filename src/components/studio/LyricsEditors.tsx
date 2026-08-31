@@ -28,7 +28,7 @@ function EditorPanel({
   return (
     <Card className="flex flex-1 flex-col">
       <p className="mb-2 font-display text-base font-semibold text-ink">
-        {side === "languageA" ? "Editor A" : "Editor B"}
+        {side === "languageA" ? "Português" : "Inglês"}
       </p>
       <TextArea
         rows={12}
