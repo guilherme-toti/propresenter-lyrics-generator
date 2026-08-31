@@ -2,11 +2,9 @@
 
 import { useState } from "react";
 import { Download, Loader2 } from "lucide-react";
-import { Card } from "@/components/ui/Card";
-import { Button } from "@/components/ui/Button";
 import type { Song } from "@/lib/types";
 
-export function ExportPanel({ song }: { song: Song }) {
+export function ExportFab({ song }: { song: Song }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const canExport = song.alignment.length > 0;
@@ -45,16 +43,21 @@ export function ExportPanel({ song }: { song: Song }) {
   };
 
   return (
-    <Card>
-      <p className="mb-3 text-[11px] font-semibold uppercase tracking-widest text-ink/45">Exportar</p>
-
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
-
-      <Button onClick={handleExport} disabled={!canExport || status === "loading"}>
+    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+      {error && (
+        <p className="max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs text-red-600 shadow-lg">
+          {error}
+        </p>
+      )}
+      <button
+        onClick={handleExport}
+        disabled={!canExport || status === "loading"}
+        title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+      >
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         Exportar
-      </Button>
-      {!canExport && <p className="mt-2 text-xs text-ink/40">Alinhe pelo menos uma linha antes de exportar.</p>}
-    </Card>
+      </button>
+    </div>
   );
 }

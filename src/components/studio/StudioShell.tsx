@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/Button";
 import { SongMetadataCard } from "@/components/studio/SongMetadataCard";
 import { LyricsEditors } from "@/components/studio/LyricsEditors";
 import { AlignmentPreview } from "@/components/studio/AlignmentPreview";
-import { ExportPanel } from "@/components/studio/ExportPanel";
+import { ExportFab } from "@/components/studio/ExportFab";
 import { useLibraryStore } from "@/lib/store";
 
 function EmptyState({ onNewProject }: { onNewProject: () => void }) {
@@ -37,11 +37,11 @@ export function StudioShell({ onNewProject }: { onNewProject: () => void }) {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-8 pb-28">
       <SongMetadataCard song={song} />
       <LyricsEditors song={song} />
       <AlignmentPreview song={song} />
-      <ExportPanel song={song} />
+      <ExportFab song={song} />
     </div>
   );
 }
