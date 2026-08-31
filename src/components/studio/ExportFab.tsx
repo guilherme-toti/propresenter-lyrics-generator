@@ -43,9 +43,9 @@ export function ExportFab({ song }: { song: Song }) {
   };
 
   return (
-    <div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-2">
+    <div className="fixed bottom-6 right-10 z-40 flex flex-col items-end gap-2">
       {error && (
-        <p className="max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs text-red-600 shadow-lg">
+        <p className="max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs text-red-600 shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
           {error}
         </p>
       )}
@@ -53,7 +53,7 @@ export function ExportFab({ song }: { song: Song }) {
         onClick={handleExport}
         disabled={!canExport || status === "loading"}
         title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
-        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lg transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
         Exportar
