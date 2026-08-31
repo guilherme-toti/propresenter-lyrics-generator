@@ -12,7 +12,7 @@ export function AppShell() {
   // real UI before then would make the first client render diverge from the server-rendered HTML.
   const mounted = useHasMounted();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const openNewProjectDialog = () => setDialogOpen(true);
   const toggleSidebar = () => setSidebarOpen((current) => !current);
