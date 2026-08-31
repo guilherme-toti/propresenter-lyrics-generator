@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
+  alignmentToRaw,
   buildAlignmentFromManual,
   deleteRow,
   insertRowAfter,
@@ -36,6 +37,19 @@ interface LibraryState {
 
 function touch(song: Song): Song {
   return { ...song, updatedAt: Date.now() };
+}
+
+/**
+ * Keeps the raw editor text in sync whenever the alignment is edited directly (text, reordering,
+ * inserted/removed rows, section splits), so the textareas never drift out of sync with what's
+ * shown in the alignment preview.
+ */
+function withSyncedRaw(alignment: AlignedLine[]): Pick<Song, "alignment" | "languageA" | "languageB"> {
+  return {
+    alignment,
+    languageA: alignmentToRaw(alignment, "a"),
+    languageB: alignmentToRaw(alignment, "b"),
+  };
 }
 
 export const useLibraryStore = create<LibraryState>()(
@@ -101,7 +115,7 @@ export const useLibraryStore = create<LibraryState>()(
       editRow: (id, rowId, side, value) => {
         set((state) => ({
           songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: updateRowText(s.alignment, rowId, side, value) }) : s,
+            s.id === id ? touch({ ...s, ...withSyncedRaw(updateRowText(s.alignment, rowId, side, value)) }) : s,
           ),
         }));
       },
@@ -117,21 +131,23 @@ export const useLibraryStore = create<LibraryState>()(
       addRowAfter: (id, rowId) => {
         set((state) => ({
           songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: insertRowAfter(s.alignment, rowId) }) : s,
+            s.id === id ? touch({ ...s, ...withSyncedRaw(insertRowAfter(s.alignment, rowId)) }) : s,
           ),
         }));
       },
 
       removeRow: (id, rowId) => {
         set((state) => ({
-          songs: state.songs.map((s) => (s.id === id ? touch({ ...s, alignment: deleteRow(s.alignment, rowId) }) : s)),
+          songs: state.songs.map((s) =>
+            s.id === id ? touch({ ...s, ...withSyncedRaw(deleteRow(s.alignment, rowId)) }) : s,
+          ),
         }));
       },
 
       moveRowInSong: (id, rowId, direction) => {
         set((state) => ({
           songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: moveRow(s.alignment, rowId, direction) }) : s,
+            s.id === id ? touch({ ...s, ...withSyncedRaw(moveRow(s.alignment, rowId, direction)) }) : s,
           ),
         }));
       },
@@ -139,7 +155,7 @@ export const useLibraryStore = create<LibraryState>()(
       toggleRowSectionBreak: (id, rowId) => {
         set((state) => ({
           songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: toggleSectionBreak(s.alignment, rowId) }) : s,
+            s.id === id ? touch({ ...s, ...withSyncedRaw(toggleSectionBreak(s.alignment, rowId)) }) : s,
           ),
         }));
       },

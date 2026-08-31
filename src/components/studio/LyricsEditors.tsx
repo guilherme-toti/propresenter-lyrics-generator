@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
@@ -12,11 +12,12 @@ import type { Song } from "@/lib/types";
 function EditorPanel({
   song,
   side,
+  onRawChange,
 }: {
   song: Song;
   side: "languageA" | "languageB";
+  onRawChange: (side: "languageA" | "languageB", value: string) => void;
 }) {
-  const setLanguageRaw = useLibraryStore((s) => s.setLanguageRaw);
   const raw = song[side];
 
   const stats = useMemo(() => {
@@ -33,7 +34,7 @@ function EditorPanel({
       <TextArea
         rows={12}
         value={raw}
-        onChange={(e) => setLanguageRaw(song.id, side, e.target.value)}
+        onChange={(e) => onRawChange(side, e.target.value)}
         placeholder="Cole a letra aqui. Deixe uma linha em branco entre as seções (verso, refrão, ponte…)."
       />
       <div className="mt-2 flex gap-2 text-[11px] text-ink/45">
@@ -44,12 +45,36 @@ function EditorPanel({
   );
 }
 
+const AUTO_REALIGN_DELAY_MS = 600;
+
 export function LyricsEditors({ song }: { song: Song }) {
+  const setLanguageRaw = useLibraryStore((s) => s.setLanguageRaw);
   const realignFromManualText = useLibraryStore((s) => s.realignFromManualText);
   const applyAiRealignment = useLibraryStore((s) => s.applyAiRealignment);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
   const hasAlignment = song.alignment.length > 0;
+  const autoRealignTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cancel any pending auto-realign when switching songs (or unmounting), so it never fires
+  // against a song that's no longer the one being edited.
+  useEffect(() => {
+    return () => {
+      if (autoRealignTimer.current) clearTimeout(autoRealignTimer.current);
+    };
+  }, [song.id]);
+
+  const handleRawChange = (side: "languageA" | "languageB", value: string) => {
+    setLanguageRaw(song.id, side, value);
+
+    // Only auto-realign once an alignment already exists — the first pass stays an explicit,
+    // deliberate action via the "Alinhar letra" button below.
+    if (!hasAlignment) return;
+    if (autoRealignTimer.current) clearTimeout(autoRealignTimer.current);
+    autoRealignTimer.current = setTimeout(() => {
+      realignFromManualText(song.id);
+    }, AUTO_REALIGN_DELAY_MS);
+  };
 
   const handleRealignWithAi = async () => {
     setAiLoading(true);
@@ -75,8 +100,8 @@ export function LyricsEditors({ song }: { song: Song }) {
   return (
     <div>
       <div className="flex flex-col gap-4 sm:flex-row">
-        <EditorPanel song={song} side="languageA" />
-        <EditorPanel song={song} side="languageB" />
+        <EditorPanel song={song} side="languageA" onRawChange={handleRawChange} />
+        <EditorPanel song={song} side="languageB" onRawChange={handleRawChange} />
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
         <div className="flex justify-center gap-2">

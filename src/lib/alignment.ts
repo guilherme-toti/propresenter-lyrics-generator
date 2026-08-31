@@ -121,6 +121,22 @@ export function groupIntoSlides(alignment: AlignedLine[], linesPerSlide: number)
   return slides;
 }
 
+/**
+ * Reconstructs the blank-line-separated raw text for one side from the current alignment, so the
+ * editor textareas always reflect edits made directly in the alignment preview (text changes,
+ * reordering, inserted/removed rows, section splits) without requiring a manual re-align.
+ */
+export function alignmentToRaw(rows: AlignedLine[], side: "a" | "b"): string {
+  const sections: string[][] = [];
+  rows.forEach((row) => {
+    if (row.sectionBreakBefore || sections.length === 0) {
+      sections.push([]);
+    }
+    sections[sections.length - 1].push(row[side]);
+  });
+  return sections.map((lines) => lines.join("\n")).join("\n\n");
+}
+
 // --- Row editing helpers (pure functions operating on an AlignedLine[]) ---
 
 export function updateRowText(rows: AlignedLine[], id: string, side: "a" | "b", value: string): AlignedLine[] {
@@ -150,12 +166,21 @@ export function deleteRow(rows: AlignedLine[], id: string): AlignedLine[] {
   return next;
 }
 
+/**
+ * Moves a row up or down by swapping its content (id/a/b) with its neighbor, while leaving each
+ * index's own sectionBreakBefore/sectionLabel in place. A section divider is anchored to a
+ * position in the list, not to whichever row object happens to sit there — otherwise moving a row
+ * across a section boundary would drag the boundary along with the row it swapped past, and the
+ * row could never become the first line of the section it moved into.
+ */
 export function moveRow(rows: AlignedLine[], id: string, direction: "up" | "down"): AlignedLine[] {
   const index = rows.findIndex((row) => row.id === id);
   const swapWith = direction === "up" ? index - 1 : index + 1;
   if (index === -1 || swapWith < 0 || swapWith >= rows.length) return rows;
   const next = [...rows];
-  [next[index], next[swapWith]] = [next[swapWith], next[index]];
+  const contentAt = ({ id, a, b }: AlignedLine) => ({ id, a, b });
+  next[index] = { ...next[index], ...contentAt(rows[swapWith]) };
+  next[swapWith] = { ...next[swapWith], ...contentAt(rows[index]) };
   return next;
 }
 
