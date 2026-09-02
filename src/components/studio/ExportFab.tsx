@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Download, Loader2 } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Download, Loader2, X } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
@@ -23,10 +23,17 @@ async function playlistStillExists(folder: string, playlistId: string): Promise<
   }
 }
 
+interface SavedInfo {
+  title: string;
+  playlistName: string | null;
+}
+
+const SAVED_MESSAGE_TIMEOUT_MS = 15_000;
+
 export function ExportFab({ song }: { song: Song }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const canExport = song.alignment.length > 0;
 
@@ -34,6 +41,12 @@ export function ExportFab({ song }: { song: Song }) {
   const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
   const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
+
+  useEffect(() => {
+    if (!saved) return;
+    const timer = setTimeout(() => setSaved(null), SAVED_MESSAGE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [saved]);
 
   const exportToLibrary = async (destinationFolder: string) => {
     const res = await fetch("/api/export/propresenter", {
@@ -44,8 +57,7 @@ export function ExportFab({ song }: { song: Song }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Falha ao exportar.");
 
-    const playlistHint = activePlaylist ? ` — arraste para "${activePlaylist.name}" no ProPresenter.` : "";
-    setSavedMessage(`Salvo em ${data.savedTo}${playlistHint}`);
+    setSaved({ title: song.title || "sua música", playlistName: activePlaylist?.name ?? null });
   };
 
   const downloadFile = async () => {
@@ -76,7 +88,7 @@ export function ExportFab({ song }: { song: Song }) {
   const handleExport = async () => {
     setStatus("loading");
     setError(null);
-    setSavedMessage(null);
+    setSaved(null);
     try {
       if (isDesktopApp() && libraryFolder) {
         if (activePlaylist && playlistsFolder) {
@@ -106,10 +118,29 @@ export function ExportFab({ song }: { song: Song }) {
           {error}
         </p>
       )}
-      {savedMessage && (
-        <p className="max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
-          {savedMessage}
-        </p>
+      {saved && (
+        <div className="flex w-full max-w-sm items-start gap-2 rounded-lg border border-line bg-white px-3 py-2.5 text-xs text-ink shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
+          <p className="flex-1">
+            Música importada com sucesso!
+            <br />
+            Procure por <strong>{saved.title}</strong> no ProPresenter
+            {saved.playlistName ? (
+              <>
+                {" "}
+                e arraste para a playlist <strong>{saved.playlistName}</strong>.
+              </>
+            ) : (
+              "."
+            )}
+          </p>
+          <button
+            onClick={() => setSaved(null)}
+            aria-label="Fechar aviso"
+            className="shrink-0 rounded-full p-0.5 text-ink/40 transition-colors hover:bg-ink/5 hover:text-ink"
+          >
+            <X size={14} />
+          </button>
+        </div>
       )}
       <button
         onClick={handleExport}
