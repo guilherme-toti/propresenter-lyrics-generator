@@ -66,12 +66,12 @@ This runs `next build` with a standalone server output, bundles a copy of the lo
 
 ### Configuring `OPENROUTER_API_KEY` for the installed app
 
-The packaged app has no `.env.local` — instead, create a plain `.env` file (same `KEY=value` format as `.env.example`) in the app's config directory:
+The packaged app doesn't read `.env.local` (that's a `next dev`/web-only convention). Instead, open **Ajustes → Chave da OpenRouter** and paste the key there — the app writes it to a `.env` file in its own config directory and applies it immediately, no restart needed:
 
 - **Windows**: `%APPDATA%\com.pma.lyricsstudio\.env`
 - **macOS**: `~/Library/Application Support/com.pma.lyricsstudio/.env`
 
-Restart the app after adding or editing it. Without it, the app runs fine and the manual (non-AI) flow works exactly as in the browser.
+Once saved, Ajustes only ever shows the key masked (e.g. `sk-or••••ab12`) — pasting a new value is the only way to change it. Without a key configured, the app runs fine and the manual (non-AI) flow works exactly as in the browser.
 
 ### Exporting straight into ProPresenter, and auto-detecting the current playlist
 
@@ -99,7 +99,7 @@ src/lib/ai/                  OpenRouter prompt/schema/response → Song mapping
 src/lib/useGenerateSong.ts   Shared "Generate with AI" flow, used by both the in-app dialog and the quick-add popup
 src/lib/propresenter/        .pro document builder/encoder, Playlist document scanner/decoder, protobuf schema loaders
 src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library/Playlists folders, active playlist)
-src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), useQuickAddListener (cross-window handoff)
+src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), useQuickAddListener (cross-window handoff), envFile.ts (reads/writes the desktop .env — API key)
 src/components/settings/     Ajustes dialog + the shared playlist picker modal
 vendor/propresenter7-proto/  Vendored ProPresenter 7 .proto schema (unofficial, reverse-engineered)
 src-tauri/                   Tauri (Rust) desktop shell — bundled server, native windows, global hotkey, folder-picker dialog

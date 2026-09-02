@@ -169,6 +169,12 @@ fn spawn_bundled_server(
         ("PORT".into(), port.to_string()),
         ("HOSTNAME".into(), LOOPBACK.into()),
         ("NODE_ENV".into(), "production".into()),
+        // Lets server-side API routes (e.g. /api/settings/api-key, which writes
+        // to this same .env file) confirm they're running inside the desktop
+        // sidecar before acting — that route must 404 on a plain web deploy,
+        // where it would otherwise let any visitor overwrite the shared
+        // deployment's env vars.
+        ("PMA_DESKTOP_APP".into(), "1".into()),
     ];
     env.extend(load_user_env(app));
 

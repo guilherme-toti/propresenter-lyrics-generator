@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "dist-placeholder",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "npm run tauri:prepare-sidecar && npm run dev",
+    "beforeDevCommand": "npm run tauri:prepare-sidecar && npm run tauri:dev:next",
     "beforeBuildCommand": "npm run tauri:prebuild"
   },
   "app": {
