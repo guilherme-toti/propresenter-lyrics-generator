@@ -1,6 +1,72 @@
-import { aiRealignSchema, aiSongSchema, type AiRealignResponse, type AiSongResponse } from "./schema";
+import {
+  aiIdentifySchema,
+  aiLyricsSchema,
+  aiRealignSchema,
+  aiSongSchema,
+  type AiIdentifyResponse,
+  type AiLyricsResponse,
+  type AiRealignResponse,
+  type AiSongResponse,
+} from "./schema";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+type ChurchLanguage = AiSongResponse["originalLanguage"];
+
+const IDENTIFY_SYSTEM_PROMPT = `You identify a worship/congregational song from a short hint (a title, a lyric snippet, or a description), and decide whether an officially recorded version of it also exists in the other of two languages.
+
+This tool is used by a bilingual church that only ever needs two languages: English and Português (Brasil).
+
+Rules:
+- Identify the single most likely song and its artist/writer from the hint.
+- "originalLanguage" is the language the song's real, original lyrics were written and recorded in — it must be either "English" or "Português (Brasil)". (If the song was actually written in a third language, pick whichever of those two has the best-known official congregational recording.)
+- Then consider THE OTHER of the two languages, and decide whether a separate, officially RECORDED version of this song exists in it: a real released recording by a known artist or ministry — not a translation you would produce yourself. This is very common for modern worship: Hillsong, Elevation, Bethel, Passion and Maverick City songs are frequently re-recorded in Português by the same ministry or by a well-known Brazilian artist, with singable adapted lyrics that are NOT literal translations.
+- Set officialVersion.exists to true ONLY if you are confident such a recording really exists and you can name it. If you are unsure, set it to false — a clean literal translation is far better than an invented "official" version.
+- When it exists, give its released title in that language and the artist/ministry that recorded it.
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+
+JSON schema:
+{
+  "title": string,
+  "artist": string,
+  "originalLanguage": "English" | "Português (Brasil)",
+  "officialVersion": { "exists": boolean, "title": string, "artist": string }
+}`;
+
+const RECALL_SYSTEM_PROMPT = `You reproduce the lyrics of one specific worship/congregational song recording, from memory, formatted as strict JSON for a slide-building tool.
+
+Rules:
+- Reproduce the lyrics of the requested recording, in the requested language, exactly as they are actually sung on it. Do NOT translate anything, and do NOT substitute a version in a different language — if you are asked for the Português (Brasil) recording, every line you return must be in Português (Brasil).
+- ALWAYS reproduce the FULL, most complete version of the song exactly as actually recorded/performed — not a shortened, radio-edit, or "first chorus only" version. Modern worship songs are very often extended live arrangements with many more sections than a simple verse/chorus structure: multiple verses, pre-chorus, chorus, bridge, refrain, interlude, vamp, tag/outro, post-chorus, key/vocalist changes, and several repeats of the chorus or bridge (sometimes with slightly different ad-libs each time). If you recognize the song as having such an extended arrangement, include ALL of it, in the correct order, not just the first pass through each section — this matters far more than keeping the response short.
+- Split the lyrics into sections, with one array entry per lyric line, exactly as that line would appear on a lyric slide.
+- If a section repeats later in the song — even with minor ad-lib differences — include it again as its own entry rather than skipping or referencing the earlier one.
+- Section "label" values must always be in Portuguese, regardless of the language of the lyrics — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Interlúdio", "Vamp", "Introdução", "Final".
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+
+JSON schema:
+{
+  "sections": [ { "label": string, "lines": [string] } ]
+}`;
+
+const PAIR_SYSTEM_PROMPT = `You pair up two officially recorded versions of the SAME worship song — one in each of two languages — line by line, so that a slide can display both at once.
+
+These are two real recordings, not a text and its translation: the wording, the number of lines, and even the section structure can differ between them. Your job is to work out which line of version B is sung at the same moment as each line of version A.
+
+Rules:
+- Align by MUSICAL POSITION, not by literal wording: two lines paired together must be the ones sung at the same point in the song. An officially adapted line is often a loose rewording rather than a literal translation — that is expected and correct; keep it.
+- NEVER rewrite, "fix", "improve", or literalize either version's wording. Reproduce both exactly as given. Preserving the real recorded wording of both versions is the entire point of this task.
+- Match sections to each other first (Verso 1 ↔ Verso 1, Refrão ↔ Refrão), then align the lines within each matched section.
+- When a matched section has a different number of lines on each side, split or merge lines on one side so that they correspond by musical position.
+- If one version genuinely has a line with no counterpart in the other (a line the other version omits, or an extra ad-lib), keep it and fill the other side with a faithful, literal translation of that line. Never leave either side of a line blank, and never drop a line.
+- If a section repeats later in the song, include it again as its own entry.
+- "original" is ALWAYS the version A line and "translation" is ALWAYS the version B line — never swap the two sides.
+- Section "label" values must always be in Portuguese — e.g. "Verso 1", "Refrão", "Pré-Refrão", "Ponte", "Vamp", "Final".
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+
+JSON schema:
+{
+  "sections": [ { "label": string, "lines": [ { "original": string, "translation": string } ] } ]
+}`;
 
 const GENERATE_SYSTEM_PROMPT = `You identify worship/congregational songs from a short hint (a title, a lyric snippet, or a description) and produce their lyrics aligned line-by-line with a translation, formatted as strict JSON for a slide-building tool.
 
@@ -71,7 +137,10 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise
       "A variável OPENROUTER_API_KEY não está configurada. Adicione-a ao arquivo .env.local (veja .env.example).",
     );
   }
-  const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o-mini";
+  // Everything here rests on how well the model *remembers* specific recordings — including
+  // Português adaptations of English worship songs, which smaller models tend not to know and
+  // will quietly replace with a literal translation of their own. Worth experimenting with.
+  const model = process.env.OPENROUTER_MODEL || "openai/gpt-4o";
 
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -106,14 +175,129 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise
   return extractJson(content);
 }
 
-export async function generateSongWithAi(query: string): Promise<AiSongResponse> {
-  const userPrompt = `Song hint: "${query}"`;
-  const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, userPrompt);
+function otherLanguage(language: ChurchLanguage): ChurchLanguage {
+  return language === "English" ? "Português (Brasil)" : "English";
+}
+
+function describe(title: string, artist: string): string {
+  return artist ? `"${title}" by ${artist}` : `"${title}"`;
+}
+
+/** Renders recalled lyrics back to plain labelled text, for the pairing prompt to read. */
+function lyricsToText(lyrics: AiLyricsResponse): string {
+  return lyrics.sections
+    .map((section) => `[${section.label}]\n${section.lines.join("\n")}`)
+    .join("\n\n");
+}
+
+/** Step 1: which song is this, and does a real recording of it exist in the other language? */
+async function identifySong(query: string): Promise<AiIdentifyResponse> {
+  const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"`);
+  const result = aiIdentifySchema.safeParse(parsed);
+  if (!result.success) {
+    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+/** Step 2: one recording's lyrics, in one language, with nothing translated. */
+async function recallLyrics(title: string, artist: string, language: ChurchLanguage): Promise<AiLyricsResponse> {
+  const userPrompt = `Reproduce the lyrics of the ${language} recording of ${describe(title, artist)}.\nEvery line you return must be in ${language}.`;
+  const parsed = await callOpenRouter(RECALL_SYSTEM_PROMPT, userPrompt);
+  const result = aiLyricsSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+/** Step 3: line up the two recordings by musical position. */
+async function pairVersions(
+  original: AiLyricsResponse,
+  officialVersion: AiLyricsResponse,
+  originalLanguage: ChurchLanguage,
+  targetLanguage: ChurchLanguage,
+): Promise<AiRealignResponse> {
+  const userPrompt = `Version A — ${originalLanguage} (this is the "original" side):\n---\n${lyricsToText(original)}\n---\n\nVersion B — ${targetLanguage} (this is the "translation" side):\n---\n${lyricsToText(officialVersion)}\n---`;
+  const parsed = await callOpenRouter(PAIR_SYSTEM_PROMPT, userPrompt);
+  const result = aiRealignSchema.safeParse(parsed);
+  if (!result.success) {
+    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+  }
+  return result.data;
+}
+
+/**
+ * The official-recording path: recall both recordings independently (in parallel — they don't
+ * depend on each other, and output tokens are what actually cost time here), then align them.
+ * Recalling and aligning have to be separate steps: asking one call for "the lyrics, already
+ * paired line-by-line with the other language" quietly forces a literal translation, because a
+ * real adapted recording rarely maps 1:1 onto the original's lines.
+ */
+async function generateFromOfficialVersion(identified: AiIdentifyResponse): Promise<AiSongResponse> {
+  const targetLanguage = otherLanguage(identified.originalLanguage);
+  const official = identified.officialVersion;
+
+  const [originalLyrics, officialLyrics] = await Promise.all([
+    recallLyrics(identified.title, identified.artist, identified.originalLanguage),
+    recallLyrics(official.title || identified.title, official.artist, targetLanguage),
+  ]);
+
+  const paired = await pairVersions(originalLyrics, officialLyrics, identified.originalLanguage, targetLanguage);
+
+  return {
+    title: identified.title,
+    artist: identified.artist,
+    originalLanguage: identified.originalLanguage,
+    translationLanguage: targetLanguage,
+    isOfficialTranslation: true,
+    sections: paired.sections,
+  };
+}
+
+/**
+ * The fallback path, and what runs whenever no official recording was found: one call that
+ * recalls the song and translates it. A literal translation lines up 1:1 with the original by
+ * construction, so it needs no separate alignment step.
+ */
+async function translateSong(query: string, identified: AiIdentifyResponse | null): Promise<AiSongResponse> {
+  const hint = identified
+    ? `Song hint: "${query}"\nThe song has already been identified as ${describe(identified.title, identified.artist)}, originally in ${identified.originalLanguage} — use that identification.`
+    : `Song hint: "${query}"`;
+  const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, hint);
   const result = aiSongSchema.safeParse(parsed);
   if (!result.success) {
     throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
   }
   return result.data;
+}
+
+export async function generateSongWithAi(query: string): Promise<AiSongResponse> {
+  let identified: AiIdentifyResponse | null = null;
+  try {
+    identified = await identifySong(query);
+  } catch (error) {
+    // Identification is an optimization, not a requirement — the single-call path below can
+    // still identify the song itself, exactly as it did before this pipeline existed.
+    console.error("song identification failed, falling back to single-call generation", error);
+  }
+
+  if (identified?.officialVersion.exists) {
+    try {
+      const song = await generateFromOfficialVersion(identified);
+      const result = aiSongSchema.safeParse(song);
+      if (result.success) {
+        return result.data;
+      }
+      console.error("official-version result failed validation", result.error);
+    } catch (error) {
+      // An official version we can't actually retrieve or align is worse than a clean literal
+      // translation, so every failure here degrades to the path that was already in production.
+      console.error("official-version path failed, falling back to translation", error);
+    }
+  }
+
+  return translateSong(query, identified);
 }
 
 export async function realignSongWithAi(languageARaw: string, languageBRaw: string): Promise<AiRealignResponse> {

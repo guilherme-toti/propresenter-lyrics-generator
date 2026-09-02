@@ -35,3 +35,35 @@ export const aiRealignSchema = z.object({
 });
 
 export type AiRealignResponse = z.infer<typeof aiRealignSchema>;
+
+/**
+ * Step 1 of the generation pipeline: identify the song, and separately decide whether a real,
+ * officially recorded version exists in the *other* language — which is a very different question
+ * from "can you translate this", and the reason it gets its own call. See generateSongWithAi().
+ */
+export const aiIdentifySchema = z.object({
+  title: z.string().min(1),
+  artist: z.string().default(""),
+  originalLanguage: churchLanguageSchema,
+  officialVersion: z.object({
+    exists: z.boolean(),
+    title: z.string().default(""),
+    artist: z.string().default(""),
+  }),
+});
+
+export type AiIdentifyResponse = z.infer<typeof aiIdentifySchema>;
+
+/** Step 2: one recorded version's lyrics, in one language, with no translation attached. */
+export const aiLyricsSchema = z.object({
+  sections: z
+    .array(
+      z.object({
+        label: z.string().min(1),
+        lines: z.array(z.string()).min(1),
+      }),
+    )
+    .min(1),
+});
+
+export type AiLyricsResponse = z.infer<typeof aiLyricsSchema>;

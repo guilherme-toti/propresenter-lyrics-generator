@@ -6,10 +6,22 @@ Turn a song into a bilingual (Português/English), line-by-line lyric alignment 
 
 Every song goes through the same pipeline — **align → preview → export** — but there are two ways to get to the alignment:
 
-- **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song, recalls its lyrics, and produces (or finds) a Português/English translation pair, already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting.
+- **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song and produces a Português/English pair already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting. See [How "Generate with AI" finds a translation](#how-generate-with-ai-finds-a-translation) for what happens between those two steps.
 - **Create manually** — paste one language into Editor A and the other into Editor B (blank line = new section), then click "Alinhar letra" to pair them line-by-line and section-by-section, editable afterwards. Once aligned, "Realinhar com IA" can send both texts back through the LLM to fix missing lines, duplicates, or misalignment.
 
 From there, both flows share the same alignment editor (reorder, split, merge, or retitle any section) and the same **Export → .pro** step, which builds a real ProPresenter 7 presentation: one slide per group of N lines, grouped into ProPresenter slide groups per section, with the song's CCLI/title/artist/key metadata attached.
+
+### How "Generate with AI" finds a translation
+
+Worship songs in this repertoire usually have *two real recordings* rather than a song and a translation of it — "Oceans" (Hillsong UNITED) also exists as the officially recorded "Oceanos", whose Portuguese lyrics are a singable adaptation, not a literal translation. Asking one LLM call for "the lyrics, already paired line-by-line with the other language" quietly forces the literal translation instead: a real adapted recording rarely maps 1:1 onto the original's lines, so a model told to produce matching pairs will translate rather than recall. Recall and alignment therefore happen in separate steps (`src/lib/ai/openrouter.ts`):
+
+1. **Identify** — which song is this, what language was it originally recorded in, and does a separately *recorded* official version exist in the other language (in whichever direction: an English song's Português version, or a Português song's English one)? Small, fast call. It's told to answer "no" whenever it isn't sure, since an invented "official" version is worse than an honest literal translation.
+2. **Recall** — if such a recording exists, both versions' lyrics are recalled independently, each by its own released title, in parallel. Neither call is allowed to translate anything.
+3. **Pair** — a third call lines the two versions up by *musical position* (which line is sung at the same moment), preserving both recordings' wording verbatim and only filling in a literal translation where one version genuinely has no counterpart line.
+
+When no official recording is found — the common case for smaller songs — none of that runs: it falls back to a single call that recalls and literally translates, which lines up 1:1 by construction. Every failure in the multi-step path degrades to that same fallback, so the feature can only add quality, never break generation. The song's metadata card shows which path produced it ("tradução oficial" vs "tradução por IA").
+
+All of this rests on how well the configured model *remembers* specific recordings, so `OPENROUTER_MODEL` is the setting most worth experimenting with — small models tend not to know Português worship adaptations and will silently substitute a literal translation of their own.
 
 ## Tech stack
 
