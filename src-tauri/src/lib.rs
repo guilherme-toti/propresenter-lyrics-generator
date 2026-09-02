@@ -4,10 +4,11 @@ use std::time::{Duration, Instant};
 
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
-use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+use tauri_plugin_updater::UpdaterExt;
 
 /// Holds the bundled Next.js server's child process so it can be killed when
 /// the window closes. Only ever populated in release builds — dev builds
@@ -34,6 +35,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin({
             let target: Shortcut = QUICK_ADD_SHORTCUT
                 .parse()
@@ -88,6 +90,12 @@ pub fn run() {
                 log::error!("failed to register quick-add global shortcut: {err}");
             }
 
+            // Dev builds have no updater endpoint worth hitting (and no signed
+            // artifacts to install) — only check in release builds.
+            if !cfg!(debug_assertions) {
+                check_for_updates(app.handle());
+            }
+
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -122,6 +130,66 @@ fn create_main_window(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
         .build()?;
 
     Ok(())
+}
+
+/// Checks the GitHub Releases updater endpoint (see tauri.conf.json's
+/// `plugins.updater`) for a newer signed release and, if the user agrees,
+/// downloads and installs it. Runs in the background — a slow or failed
+/// check must never delay or block the app opening.
+fn check_for_updates(app: &AppHandle) {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let updater = match handle.updater() {
+            Ok(updater) => updater,
+            Err(err) => {
+                log::error!("failed to build updater: {err}");
+                return;
+            }
+        };
+
+        let update = match updater.check().await {
+            Ok(Some(update)) => update,
+            Ok(None) => return,
+            Err(err) => {
+                log::error!("update check failed: {err}");
+                return;
+            }
+        };
+
+        let version = update.version.clone();
+        let install_handle = handle.clone();
+        handle
+            .dialog()
+            .message(format!(
+                "Uma nova versão do PMA Lyrics Studio está disponível ({version}). Atualizar agora?"
+            ))
+            .title("Atualização disponível")
+            .buttons(MessageDialogButtons::YesNo)
+            .show(move |confirmed| {
+                if !confirmed {
+                    return;
+                }
+                tauri::async_runtime::spawn(async move {
+                    // Windows exits the app itself once the installer launches
+                    // successfully; macOS/Linux (AppImage) need this explicit
+                    // restart to actually run the newly installed version.
+                    if let Err(err) = update.download_and_install(|_, _| {}, || {}).await {
+                        log::error!("update install failed: {err}");
+                        let error_handle = install_handle.clone();
+                        std::thread::spawn(move || {
+                            error_handle
+                                .dialog()
+                                .message("Não foi possível instalar a atualização. Tente novamente mais tarde.")
+                                .title("PMA Lyrics Studio")
+                                .kind(MessageDialogKind::Error)
+                                .blocking_show();
+                        });
+                        return;
+                    }
+                    install_handle.request_restart();
+                });
+            });
+    });
 }
 
 /// Shows the "quick add a song" popup (global hotkey target), creating it on

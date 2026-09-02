@@ -63,6 +63,20 @@ This runs `next build` with a standalone server output, bundles a copy of the lo
 
 - **Windows**: `bundle/nsis/*.exe` and/or `bundle/msi/*.msi`
 - **macOS**: `bundle/dmg/*.dmg` and `bundle/macos/*.app`
+- **Linux**: `bundle/deb/*.deb`, `bundle/rpm/*.rpm`, `bundle/appimage/*.AppImage`
+
+### Auto-update
+
+The installed app checks for a newer release on every launch (background check, doesn't block opening) and, if one's found, asks "Uma nova versão está disponível. Atualizar agora?" before downloading and installing it — see `check_for_updates()` in `src-tauri/src/lib.rs`. It's driven entirely by [`.github/workflows/release.yml`](.github/workflows/release.yml), which builds and signs installers for all three platforms whenever a `vX.Y.Z` tag is pushed:
+
+1. Bump `version` in `src-tauri/tauri.conf.json` (e.g. `"0.2.0"`).
+2. Commit, then tag and push: `git tag v0.2.0 && git push origin v0.2.0`.
+3. Wait for the "Release desktop app" GitHub Action to finish building all three platforms (~10-15 min) — it creates a **draft** GitHub Release with every installer attached, plus a `latest.json` manifest the updater reads.
+4. Review the draft release on GitHub and click **Publish**. Nothing goes out to existing installs until you do this — publishing is what makes `releases/latest/...` resolve to this version.
+
+Update signing needs a one-time setup (already done for this repo — see the person who set it up if you need to rotate the key): a signing keypair (`npx tauri signer generate`), with the private key stored as the `TAURI_SIGNING_PRIVATE_KEY` repo secret (Settings → Secrets and variables → Actions) and the public key embedded in `tauri.conf.json`'s `plugins.updater.pubkey`. Losing the private key means old installs can never verify a future update again — back it up somewhere safe (password manager), not just in CI.
+
+**Linux note:** the updater plugin only supports auto-update through the AppImage build — `.deb`/`.rpm` installs are managed by the system's own package manager instead and won't self-update. Not a concern for Windows/macOS, which is what this app actually targets.
 
 ### Configuring `OPENROUTER_API_KEY` for the installed app
 
