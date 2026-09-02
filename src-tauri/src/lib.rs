@@ -158,7 +158,11 @@ fn spawn_bundled_server(
     app: &tauri::AppHandle,
     port: u16,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let server_dir = app.path().resolve("server", BaseDirectory::Resource)?;
+    // The bundler preserves the full glob path from tauri.conf.json's
+    // `bundle.resources` ("resources/server/**/*") under the resource root —
+    // confirmed against the actual .deb layout — so this must match, not
+    // just "server".
+    let server_dir = app.path().resolve("resources/server", BaseDirectory::Resource)?;
     let server_entry = server_dir.join("server.js");
 
     let mut env: Vec<(String, String)> = vec![
