@@ -1,11 +1,26 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { z } from "zod";
 
 export interface PlaylistRef {
   id: string;
   name: string;
   sourceFile: string;
 }
+
+const playlistRefSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  sourceFile: z.string(),
+});
+
+const persistedDesktopStateSchema = z.object({
+  libraryFolder: z.string().nullable().optional(),
+  playlistsFolder: z.string().nullable().optional(),
+  playlistsBaselined: z.boolean().optional(),
+  activePlaylist: playlistRefSchema.nullable().optional(),
+  knownPlaylistIds: z.array(z.string()).optional(),
+});
 
 interface DesktopState {
   /** ProPresenter Library folder — where exported .pro files are written. */
@@ -53,7 +68,10 @@ export const useDesktopStore = create<DesktopState>()(
     {
       name: "lyrics-studio-desktop",
       version: 0,
-      migrate: (persistedState) => persistedState as DesktopState,
+      migrate: (persistedState) => {
+        const parsed = persistedDesktopStateSchema.safeParse(persistedState);
+        return parsed.success ? parsed.data : {};
+      },
     },
   ),
 );

@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import { z } from "zod";
 import {
   alignmentToRaw,
   buildAlignmentFromManual,
@@ -11,6 +12,7 @@ import {
   updateSectionLabel,
 } from "@/lib/alignment";
 import { createEmptySong, type AlignedLine, type Song } from "@/lib/types";
+import { storedSongSchema } from "@/lib/songSchema";
 
 interface LibraryState {
   songs: Song[];
@@ -163,10 +165,21 @@ export const useLibraryStore = create<LibraryState>()(
     {
       name: "lyrics-studio-library",
       version: 0,
-      // No shape migrations have ever been needed — this only exists so zustand
-      // doesn't discard old localStorage data (and warn about it) whenever the
-      // persisted blob predates this option being set explicitly.
-      migrate: (persistedState) => persistedState as LibraryState,
+      // No real shape migrations exist yet — this only exists so zustand doesn't
+      // discard old localStorage data (and warn about it) whenever the persisted
+      // blob predates this option being set explicitly. Songs are re-validated
+      // rather than trusted as-is: a stale/malformed entry gets dropped instead
+      // of crashing the app on render.
+      migrate: (persistedState) => {
+        const candidate = persistedState as { songs?: unknown; activeSongId?: unknown } | undefined;
+        const parsed = z.array(storedSongSchema).safeParse(candidate?.songs);
+        const songs = (parsed.success ? parsed.data : []) as Song[];
+        const activeSongId =
+          typeof candidate?.activeSongId === "string" && songs.some((s) => s.id === candidate.activeSongId)
+            ? candidate.activeSongId
+            : (songs[0]?.id ?? null);
+        return { songs, activeSongId };
+      },
     },
   ),
 );

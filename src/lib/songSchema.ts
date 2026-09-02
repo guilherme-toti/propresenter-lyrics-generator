@@ -25,3 +25,12 @@ export const songSchema = z.object({
   createdAt: z.number(),
   updatedAt: z.number(),
 });
+
+/**
+ * Same shape as `songSchema`, minus the "at least one aligned line" rule —
+ * that rule only makes sense at export time. Used to validate songs coming
+ * out of localStorage, where an unaligned in-progress draft is normal.
+ */
+export const storedSongSchema = songSchema.extend({
+  alignment: z.array(alignedLineSchema),
+});
