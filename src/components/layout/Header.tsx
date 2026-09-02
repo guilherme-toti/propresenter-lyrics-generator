@@ -6,11 +6,21 @@ interface HeaderProps {
   sidebarOpen: boolean;
   onToggleSidebar: () => void;
   onNewSong: () => void;
+  // The desktop app's window title bar already shows this — repeating it
+  // here would be a visible duplicate, so AppShell only sets this on web.
+  showTitle?: boolean;
   showSettings?: boolean;
   onOpenSettings?: () => void;
 }
 
-export function Header({ sidebarOpen, onToggleSidebar, onNewSong, showSettings, onOpenSettings }: HeaderProps) {
+export function Header({
+  sidebarOpen,
+  onToggleSidebar,
+  onNewSong,
+  showTitle = true,
+  showSettings,
+  onOpenSettings,
+}: HeaderProps) {
   return (
     <header className="flex items-center gap-3 border-b border-line bg-cream-50 px-4 py-3">
       <button
@@ -21,7 +31,7 @@ export function Header({ sidebarOpen, onToggleSidebar, onNewSong, showSettings, 
       >
         <Menu size={18} />
       </button>
-      <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>
+      {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
       <div className="flex-1" />
       {showSettings && (
         <button

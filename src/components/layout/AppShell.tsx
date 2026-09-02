@@ -49,6 +49,7 @@ export function AppShell() {
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
         onNewSong={openNewSongDialog}
+        showTitle={!desktop}
         showSettings={desktop}
         onOpenSettings={() => setSettingsOpen(true)}
       />
