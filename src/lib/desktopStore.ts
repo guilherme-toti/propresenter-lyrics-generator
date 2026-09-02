@@ -50,6 +50,10 @@ export const useDesktopStore = create<DesktopState>()(
 
       markPlaylistsBaselined: () => set({ playlistsBaselined: true }),
     }),
-    { name: "lyrics-studio-desktop" },
+    {
+      name: "lyrics-studio-desktop",
+      version: 0,
+      migrate: (persistedState) => persistedState as DesktopState,
+    },
   ),
 );

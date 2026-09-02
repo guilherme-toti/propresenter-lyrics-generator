@@ -160,6 +160,13 @@ export const useLibraryStore = create<LibraryState>()(
         }));
       },
     }),
-    { name: "lyrics-studio-library" },
+    {
+      name: "lyrics-studio-library",
+      version: 0,
+      // No shape migrations have ever been needed — this only exists so zustand
+      // doesn't discard old localStorage data (and warn about it) whenever the
+      // persisted blob predates this option being set explicitly.
+      migrate: (persistedState) => persistedState as LibraryState,
+    },
   ),
 );
