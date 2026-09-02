@@ -6,12 +6,15 @@ import { LibrarySidebar } from "@/components/library/LibrarySidebar";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { NewSongDialog } from "@/components/studio/NewSongDialog";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { useHasMounted } from "@/lib/useHasMounted";
 import { isDesktopApp } from "@/lib/tauri/env";
+import { useDesktopStore } from "@/lib/desktopStore";
 import { usePlaylistWatcher } from "@/lib/desktop/usePlaylistWatcher";
 import { useQuickAddListener } from "@/lib/desktop/useQuickAddListener";
+import { useValidateActivePlaylist } from "@/lib/desktop/useValidateActivePlaylist";
 
 export function AppShell() {
   // Zustand's persisted store only reflects localStorage after the client mounts; rendering the
@@ -21,6 +24,9 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
+  const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
+  const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
+  const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   useQuickAddListener();
 
   const openNewSongDialog = () => setDialogOpen(true);
@@ -71,6 +77,16 @@ export function AppShell() {
             </div>
           </div>
         </Modal>
+      )}
+      {desktop && (
+        <PlaylistPickerModal
+          open={missingPlaylist}
+          folder={playlistsFolder}
+          onClose={dismissMissingPlaylist}
+          onSelect={setActivePlaylist}
+          title="A playlist selecionada não foi encontrada"
+          description="Ela pode ter sido renomeada ou apagada no ProPresenter. Escolha outra, ou crie uma nova por lá e feche este aviso pra tentar de novo mais tarde."
+        />
       )}
     </div>
   );
