@@ -1,4 +1,4 @@
-use std::net::{TcpListener, TcpStream};
+use std::net::TcpStream;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -14,6 +14,12 @@ use tauri_plugin_shell::ShellExt;
 struct ServerProcess(Mutex<Option<CommandChild>>);
 
 const LOOPBACK: &str = "127.0.0.1";
+/// Fixed (not OS-assigned) so capabilities/default.json can name an exact
+/// `remote.urls` origin for the bundled server's window — Tauri's ACL scopes
+/// permissions (dialog, shell sidecar spawn, …) to specific window URLs, and
+/// an ephemeral port can't be listed in advance. Distinct from `next dev`'s
+/// 3000 so a leftover dev server never collides with the packaged app.
+const PROD_PORT: u16 = 17872;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -35,10 +41,9 @@ pub fn run() {
                 // passes control here — see build.devUrl/beforeDevCommand.
                 format!("http://{LOOPBACK}:3000")
             } else {
-                let port = pick_free_port();
-                spawn_bundled_server(app.handle(), port)?;
-                wait_for_server(port, Duration::from_secs(20));
-                format!("http://{LOOPBACK}:{port}")
+                spawn_bundled_server(app.handle(), PROD_PORT)?;
+                wait_for_server(PROD_PORT, Duration::from_secs(20));
+                format!("http://{LOOPBACK}:{PROD_PORT}")
             };
 
             WebviewWindowBuilder::new(app, "main", WebviewUrl::External(url.parse().unwrap()))
@@ -58,16 +63,6 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
-}
-
-/// Asks the OS for an ephemeral loopback port. There is a tiny race between
-/// dropping this listener and the sidecar binding the same port, but it's
-/// the same trade-off every "let the OS pick a free port" tool makes.
-fn pick_free_port() -> u16 {
-    TcpListener::bind((LOOPBACK, 0))
-        .and_then(|listener| listener.local_addr())
-        .map(|addr| addr.port())
-        .unwrap_or(3000)
 }
 
 /// Spawns the bundled Node runtime (`binaries/node-<target-triple>`, declared

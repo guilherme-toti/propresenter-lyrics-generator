@@ -3,6 +3,9 @@
   "identifier": "default",
   "description": "enables the default permissions",
   "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:3000/*", "http://127.0.0.1:17872/*"]
+  },
   "permissions": [
     "core:default",
     "dialog:default",
