@@ -6,7 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
 import { useLibraryStore } from "@/lib/store";
-import type { Song } from "@/lib/types";
+import { useGenerateSong } from "@/lib/useGenerateSong";
 
 interface NewSongDialogProps {
   open: boolean;
@@ -15,14 +15,12 @@ interface NewSongDialogProps {
 
 export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   const [query, setQuery] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const createSong = useLibraryStore((s) => s.createSong);
+  const { generate, loading, error, setError } = useGenerateSong();
 
   const reset = () => {
     setQuery("");
     setError(null);
-    setLoading(false);
   };
 
   const handleClose = () => {
@@ -36,31 +34,8 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   };
 
   const handleGenerate = async () => {
-    if (query.trim().length < 2) {
-      setError(
-        "Digite o título de uma música, um trecho da letra ou uma breve descrição.",
-      );
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch("/api/generate-song", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Algo deu errado.");
-      }
-      createSong(data.song as Song);
-      handleClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Algo deu errado.");
-    } finally {
-      setLoading(false);
-    }
+    const id = await generate(query);
+    if (id) handleClose();
   };
 
   return (

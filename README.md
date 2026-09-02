@@ -4,7 +4,7 @@ Turn a song into a bilingual (Português/English), line-by-line lyric alignment 
 
 ## How it works
 
-Every project goes through the same pipeline — **align → preview → export** — but there are two ways to get to the alignment:
+Every song goes through the same pipeline — **align → preview → export** — but there are two ways to get to the alignment:
 
 - **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song, recalls its lyrics, and produces (or finds) a Português/English translation pair, already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting.
 - **Create manually** — paste one language into Editor A and the other into Editor B (blank line = new section), then click "Alinhar letra" to pair them line-by-line and section-by-section, editable afterwards. Once aligned, "Realinhar com IA" can send both texts back through the LLM to fix missing lines, duplicates, or misalignment.
@@ -16,7 +16,7 @@ From there, both flows share the same alignment editor (reorder, split, merge, o
 - **Next.js 16** (App Router, Turbopack, React 19)
 - **TypeScript**, **Zod** for schema validation at every trust boundary (AI responses, export payloads)
 - **Tailwind CSS 4**
-- **Zustand** (+ `persist`) for the local project library — everything lives in the browser's `localStorage`; there is no backend database
+- **Zustand** (+ `persist`) for the local song library — everything lives in the browser's `localStorage`; there is no backend database
 - **protobufjs**, decoding/encoding against a vendored, reverse-engineered ProPresenter 7 `.proto` schema (`vendor/propresenter7-proto`, MIT licensed — see that folder's `README.md`)
 - **Tauri 2** (Rust) wraps the same app as a native Windows/macOS/Linux desktop installer — see [Desktop app](#desktop-app-windowsmacos) below
 
@@ -82,20 +82,27 @@ Open **Ajustes** (the gear icon in the header — desktop app only) to configure
 
 **Why the export doesn't write directly into the playlist itself:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`) that references presentations elsewhere on disk. Editing that document from outside ProPresenter while it might be open and live-presenting risks corrupting it or losing the change to ProPresenter's own autosave. Writing into the Library instead is the same effect with none of that risk: the file appears where ProPresenter already expects new presentations, and dragging it into the current playlist is one click. If the playlist you had selected gets deleted or renamed before your next export, the app notices and asks you to pick another before it writes the file.
 
+### Quick-add: a global hotkey for songs you didn't plan for
+
+Press **`Ctrl+Alt+Shift+N`** (`⌃⌥⇧N` on macOS) from anywhere — the app doesn't need to be focused, or even visible — and a small popup appears with just a text field: type a title, lyric snippet, or description and hit Enter. That's for the moment the band starts a song that isn't in your library yet: no need to switch away from ProPresenter, bring the full app to the front, and click through "Nova música" first.
+
+The popup only captures the query and kicks off "Generate with AI"; once the song's ready, the popup closes, the main window comes to the front, and the new song is open in the alignment editor exactly like the normal "Nova música" flow — same review step before exporting. Esc, or clicking away, dismisses the popup without doing anything.
+
 ## Project structure
 
 ```
-src/app/                     Routes: the studio page + API routes (generate-song, export/propresenter)
-src/components/studio/       New-project dialog, lyric editors, alignment preview, export panel
-src/components/library/      Sidebar listing saved projects (Zustand-persisted)
+src/app/                     Routes: the studio page, quick-add popup page, API routes (generate-song, export/propresenter)
+src/components/studio/       New-song dialog, lyric editors, alignment preview, export panel
+src/components/library/      Sidebar listing saved songs (Zustand-persisted)
 src/lib/alignment.ts         Pure functions: splitting lyrics into sections, pairing lines, slide grouping
 src/lib/ai/                  OpenRouter prompt/schema/response → Song mapping
+src/lib/useGenerateSong.ts   Shared "Generate with AI" flow, used by both the in-app dialog and the quick-add popup
 src/lib/propresenter/        .pro document builder/encoder, Playlist document scanner/decoder, protobuf schema loaders
 src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library/Playlists folders, active playlist)
-src/lib/desktop/             usePlaylistWatcher — polls the Playlists folder for newly created playlists
+src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), useQuickAddListener (cross-window handoff)
 src/components/settings/     Ajustes dialog + the shared playlist picker modal
 vendor/propresenter7-proto/  Vendored ProPresenter 7 .proto schema (unofficial, reverse-engineered)
-src-tauri/                   Tauri (Rust) desktop shell — spawns the bundled server, opens the native window, native folder-picker dialog
+src-tauri/                   Tauri (Rust) desktop shell — bundled server, native windows, global hotkey, folder-picker dialog
 scripts/tauri/prebuild.mjs   Assembles the standalone Next.js server + sidecar Node binary before a Tauri build
 ```
 

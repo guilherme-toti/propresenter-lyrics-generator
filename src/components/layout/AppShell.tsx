@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/Button";
 import { useHasMounted } from "@/lib/useHasMounted";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { usePlaylistWatcher } from "@/lib/desktop/usePlaylistWatcher";
+import { useQuickAddListener } from "@/lib/desktop/useQuickAddListener";
 
 export function AppShell() {
   // Zustand's persisted store only reflects localStorage after the client mounts; rendering the
@@ -20,6 +21,7 @@ export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
+  useQuickAddListener();
 
   const openNewSongDialog = () => setDialogOpen(true);
   const toggleSidebar = () => setSidebarOpen((current) => !current);
