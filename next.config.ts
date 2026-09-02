@@ -10,6 +10,7 @@ const nextConfig: NextConfig = {
   // so serverless bundlers need an explicit hint to trace and include them in the output.
   outputFileTracingIncludes: {
     "/api/export/propresenter": ["./vendor/propresenter7-proto/proto/**/*"],
+    "/api/playlists/scan": ["./vendor/propresenter7-proto/proto/**/*"],
   },
 };
 

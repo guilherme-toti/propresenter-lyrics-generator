@@ -32,7 +32,7 @@ Open [http://localhost:3000](http://localhost:3000). The manual flow works with 
 
 ## Desktop app (Windows/macOS)
 
-The exact same app also ships as a native installable desktop app via [Tauri](https://tauri.app): a small Rust shell opens the OS's native webview (WebView2 on Windows, WebKit on macOS) and points it at a bundled copy of this same Next.js app, run as a background sidecar process — no separate backend, no Chromium bundled, no code fork. Today this is scope-for-scope identical to the web app (same studio, same AI generation, same `.pro` export via download); it's the foundation for later native-only features (e.g. writing the `.pro` straight into a detected ProPresenter playlist folder).
+The exact same app also ships as a native installable desktop app via [Tauri](https://tauri.app): a small Rust shell opens the OS's native webview (WebView2 on Windows, WebKit on macOS) and points it at a bundled copy of this same Next.js app, run as a background sidecar process — no separate backend, no Chromium bundled, no code fork. The web app's studio, AI generation, and `.pro` download all work identically; the desktop build additionally knows how to export straight into a ProPresenter Library folder (see below).
 
 ### Prerequisites
 
@@ -73,6 +73,15 @@ The packaged app has no `.env.local` — instead, create a plain `.env` file (sa
 
 Restart the app after adding or editing it. Without it, the app runs fine and the manual (non-AI) flow works exactly as in the browser.
 
+### Exporting straight into ProPresenter, and auto-detecting the current playlist
+
+Open **Ajustes** (the gear icon in the header — desktop app only) to configure:
+
+- **Pasta da Library** — a ProPresenter Library folder. Once set, clicking "Exportar" writes the `.pro` file straight into it (no download dialog) instead of downloading it; the ProPresenter Library panel already reads that folder natively, so the presentation shows up there.
+- **Pasta de Playlists** — your ProPresenter `Playlists` folder. The app polls it every ~20s for playlists it hasn't seen before (e.g. a new one you just created for this week's service) and asks "Nova playlist encontrada: '<nome>'. Usar ela como destino?" — accepting just sets a label shown alongside the export button, reminding you which playlist to drag the exported presentation into.
+
+**Why the export doesn't write directly into the playlist itself:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`) that references presentations elsewhere on disk. Editing that document from outside ProPresenter while it might be open and live-presenting risks corrupting it or losing the change to ProPresenter's own autosave. Writing into the Library instead is the same effect with none of that risk: the file appears where ProPresenter already expects new presentations, and dragging it into the current playlist is one click. If the playlist you had selected gets deleted or renamed before your next export, the app notices and asks you to pick another before it writes the file.
+
 ## Project structure
 
 ```
@@ -81,9 +90,12 @@ src/components/studio/       New-project dialog, lyric editors, alignment previe
 src/components/library/      Sidebar listing saved projects (Zustand-persisted)
 src/lib/alignment.ts         Pure functions: splitting lyrics into sections, pairing lines, slide grouping
 src/lib/ai/                  OpenRouter prompt/schema/response → Song mapping
-src/lib/propresenter/        .pro document builder, RTF text encoder, protobuf schema loader/encoder
+src/lib/propresenter/        .pro document builder/encoder, Playlist document scanner/decoder, protobuf schema loaders
+src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library/Playlists folders, active playlist)
+src/lib/desktop/             usePlaylistWatcher — polls the Playlists folder for newly created playlists
+src/components/settings/     Ajustes dialog + the shared playlist picker modal
 vendor/propresenter7-proto/  Vendored ProPresenter 7 .proto schema (unofficial, reverse-engineered)
-src-tauri/                   Tauri (Rust) desktop shell — spawns the bundled server, opens the native window
+src-tauri/                   Tauri (Rust) desktop shell — spawns the bundled server, opens the native window, native folder-picker dialog
 scripts/tauri/prebuild.mjs   Assembles the standalone Next.js server + sidecar Node binary before a Tauri build
 ```
 
