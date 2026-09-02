@@ -5,6 +5,7 @@ import { Header } from "@/components/layout/Header";
 import { LibrarySidebar } from "@/components/library/LibrarySidebar";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { NewSongDialog } from "@/components/studio/NewSongDialog";
+import { GeneratingOverlay } from "@/components/studio/GeneratingOverlay";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { Modal } from "@/components/ui/Modal";
@@ -12,6 +13,7 @@ import { Button } from "@/components/ui/Button";
 import { useHasMounted } from "@/lib/useHasMounted";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
+import { useGenerationStore } from "@/lib/generationStore";
 import { usePlaylistWatcher } from "@/lib/desktop/usePlaylistWatcher";
 import { useQuickAddListener } from "@/lib/desktop/useQuickAddListener";
 import { useValidateActivePlaylist } from "@/lib/desktop/useValidateActivePlaylist";
@@ -27,6 +29,9 @@ export function AppShell() {
   const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
   const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
+  const generationQuery = useGenerationStore((s) => s.query);
+  const generationError = useGenerationStore((s) => s.error);
+  const dismissGeneration = useGenerationStore((s) => s.finish);
   useQuickAddListener();
 
   const openNewSongDialog = () => setDialogOpen(true);
@@ -56,7 +61,11 @@ export function AppShell() {
       <div className="flex flex-1 overflow-hidden">
         <LibrarySidebar open={sidebarOpen} onNewSong={openNewSongDialog} />
         <main className="flex-1 overflow-y-auto">
-          <StudioShell onNewSong={openNewSongDialog} />
+          {generationQuery ? (
+            <GeneratingOverlay query={generationQuery} error={generationError} onDismiss={dismissGeneration} />
+          ) : (
+            <StudioShell onNewSong={openNewSongDialog} />
+          )}
         </main>
       </div>
       <NewSongDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

@@ -56,3 +56,15 @@
     border-color: var(--color-line);
   }
 }
+
+/* Bars in the "Gerando…" overlay (see GeneratingOverlay.tsx) — each bar runs this on its own
+   duration/delay so they bounce out of sync instead of pulsing in lockstep. */
+@keyframes equalize {
+  0%,
+  100% {
+    height: 10px;
+  }
+  50% {
+    height: 56px;
+  }
+}

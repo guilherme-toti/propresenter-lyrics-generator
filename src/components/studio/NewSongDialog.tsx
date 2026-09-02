@@ -1,12 +1,15 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, PenLine, Sparkles } from "lucide-react";
+import { PenLine, Sparkles } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
 import { useLibraryStore } from "@/lib/store";
 import { useGenerateSong } from "@/lib/useGenerateSong";
+import { useGenerationStore } from "@/lib/generationStore";
+
+const MIN_QUERY_LENGTH = 2;
 
 interface NewSongDialogProps {
   open: boolean;
@@ -16,15 +19,13 @@ interface NewSongDialogProps {
 export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   const [query, setQuery] = useState("");
   const createSong = useLibraryStore((s) => s.createSong);
-  const { generate, loading, error, setError } = useGenerateSong();
-
-  const reset = () => {
-    setQuery("");
-    setError(null);
-  };
+  const { generate } = useGenerateSong();
+  const startGeneration = useGenerationStore((s) => s.start);
+  const failGeneration = useGenerationStore((s) => s.fail);
+  const finishGeneration = useGenerationStore((s) => s.finish);
 
   const handleClose = () => {
-    reset();
+    setQuery("");
     onClose();
   };
 
@@ -33,9 +34,25 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
     handleClose();
   };
 
+  const canGenerate = query.trim().length >= MIN_QUERY_LENGTH;
+
   const handleGenerate = async () => {
-    const id = await generate(query);
-    if (id) handleClose();
+    if (!canGenerate) return;
+    const trimmed = query.trim();
+
+    // Close the dialog and switch straight to the full-screen overlay — same
+    // flow the quick-add popup hands off to, instead of a spinner inside this
+    // modal (createSong() below sets it as the active song on success, so
+    // StudioShell already lands on it once the overlay clears).
+    startGeneration(trimmed);
+    handleClose();
+
+    const result = await generate(trimmed);
+    if ("id" in result) {
+      finishGeneration();
+    } else {
+      failGeneration(result.error);
+    }
   };
 
   return (
@@ -53,36 +70,21 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
             }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+            onKeyDown={(e) => e.key === "Enter" && void handleGenerate()}
           />
           <p className="mt-1.5 text-xs text-ink/45">
             Vamos parear automaticamente com português (Brasil) e inglês.
           </p>
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
         <div className="flex gap-2">
           <Button variant="secondary" onClick={handleManual} className="flex-1">
             <PenLine size={16} />
             Criar manualmente
           </Button>
-          <Button
-            onClick={handleGenerate}
-            disabled={loading}
-            className="flex-1"
-          >
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Buscando a música…
-              </>
-            ) : (
-              <>
-                <Sparkles size={16} />
-                Gerar com IA
-              </>
-            )}
+          <Button onClick={handleGenerate} disabled={!canGenerate} className="flex-1">
+            <Sparkles size={16} />
+            Gerar com IA
           </Button>
         </div>
       </div>

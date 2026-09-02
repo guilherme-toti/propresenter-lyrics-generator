@@ -140,7 +140,12 @@ fn show_quick_add(app: &AppHandle) {
     let url = format!("{base_url}/quick-add");
     let Ok(parsed) = url.parse() else { return };
 
-    let _ = WebviewWindowBuilder::new(app, "quick-add", WebviewUrl::External(parsed))
+    // A background app (this hotkey typically fires while some other app, e.g.
+    // ProPresenter, is focused) doesn't automatically get OS-level keyboard
+    // focus for a window it just created — an explicit set_focus() request is
+    // needed, or the input inside never actually becomes focusable until the
+    // user clicks it once themselves.
+    if let Ok(window) = WebviewWindowBuilder::new(app, "quick-add", WebviewUrl::External(parsed))
         .title("Nova música")
         .inner_size(560.0, 100.0)
         .resizable(false)
@@ -148,7 +153,10 @@ fn show_quick_add(app: &AppHandle) {
         .always_on_top(true)
         .center()
         .skip_taskbar(true)
-        .build();
+        .build()
+    {
+        let _ = window.set_focus();
+    }
 }
 
 /// Spawns the bundled Node runtime (`binaries/node-<target-triple>`, declared
