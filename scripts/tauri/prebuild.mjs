@@ -4,6 +4,13 @@
 // into place as the sidecar Tauri bundles into the installer. Both outputs
 // are build artifacts (gitignored) — this script must run before every
 // `tauri build`.
+//
+// Tauri's build.rs validates that every `bundle.externalBin` path exists on
+// disk unconditionally — even for `tauri dev`, which never actually spawns
+// the sidecar (see src-tauri/src/lib.rs). So `tauri dev` also needs the
+// sidecar binary to exist, just not the assembled standalone server; run
+// with --sidecar-only (see beforeDevCommand in tauri.conf.json) to do only
+// that part, fast and without requiring a prior `next build`.
 
 import { execFileSync } from "node:child_process";
 import {
@@ -11,8 +18,10 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  readdirSync,
   rmSync,
   cpSync,
+  writeFileSync,
 } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
@@ -53,6 +62,20 @@ function assembleServer() {
   console.log(`[tauri:prebuild] assembled standalone server -> ${path.relative(repoRoot, serverResourceDir)}`);
 }
 
+/**
+ * `tauri.conf.json`'s `bundle.resources: ["resources/server/**\/*"]` glob is
+ * also validated at build.rs time regardless of dev vs. build, and an empty
+ * match is an error — so `tauri dev` needs *something* on disk here too,
+ * even though it's never read in dev mode. A real build's assembleServer()
+ * overwrites this directory with the actual standalone server.
+ */
+function ensureResourcesPlaceholder() {
+  mkdirSync(serverResourceDir, { recursive: true });
+  if (readdirSync(serverResourceDir).length === 0) {
+    writeFileSync(path.join(serverResourceDir, ".placeholder"), "");
+  }
+}
+
 function hostTargetTriple() {
   const output = execFileSync("rustc", ["-vV"], { encoding: "utf8" });
   const match = output.match(/^host:\s*(\S+)/m);
@@ -76,5 +99,9 @@ function prepareSidecar() {
   );
 }
 
-assembleServer();
+if (process.argv.includes("--sidecar-only")) {
+  ensureResourcesPlaceholder();
+} else {
+  assembleServer();
+}
 prepareSidecar();

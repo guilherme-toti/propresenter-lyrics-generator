@@ -9,6 +9,7 @@
     "lint": "eslint",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
+    "tauri:prepare-sidecar": "node scripts/tauri/prebuild.mjs --sidecar-only",
     "tauri:prebuild": "next build && node scripts/tauri/prebuild.mjs",
     "tauri:build": "tauri build"
   },
