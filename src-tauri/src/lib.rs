@@ -72,7 +72,13 @@ pub fn run() {
                 .min_inner_size(960.0, 600.0)
                 .build()?;
 
-            app.global_shortcut().register(QUICK_ADD_SHORTCUT)?;
+            // Best-effort: the app is fully usable without the quick-add hotkey (the
+            // "Nova música" button covers the same flow), so a registration failure
+            // — the combo already taken by another app, a permission the OS denied,
+            // whatever — must not take the whole app down with it.
+            if let Err(err) = app.global_shortcut().register(QUICK_ADD_SHORTCUT) {
+                log::error!("failed to register quick-add global shortcut: {err}");
+            }
 
             Ok(())
         })
