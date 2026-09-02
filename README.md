@@ -23,9 +23,9 @@ From there, both flows share the same alignment editor (reorder, split, merge, o
 ## Getting started (web)
 
 ```bash
-npm install
+pnpm install
 cp .env.example .env.local   # add your OpenRouter key to use "Generate with AI"
-npm run dev
+pnpm dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). The manual flow works with no configuration; the AI flow needs `OPENROUTER_API_KEY` set (see `.env.example`) and otherwise fails gracefully with a message explaining how to configure it.
@@ -36,7 +36,7 @@ The exact same app also ships as a native installable desktop app via [Tauri](ht
 
 ### Prerequisites
 
-- Node.js 20+ and npm (already needed for the web app)
+- Node.js 20+ and [pnpm](https://pnpm.io) (already needed for the web app) — this repo commits `pnpm-lock.yaml` as the single source of truth for dependency versions, so use `pnpm` rather than `npm`/`yarn` for installs to avoid a second, drifting lockfile
 - [Rust](https://www.rust-lang.org/tools/install) via `rustup` (stable toolchain)
 - Platform build tools, per [Tauri's prerequisites guide](https://tauri.app/start/prerequisites/):
   - **Windows**: "Desktop development with C++" workload from the Visual Studio Build Tools, and the WebView2 runtime (preinstalled on Windows 11 and most updated Windows 10 machines)
@@ -47,8 +47,8 @@ Builds are **not cross-compiled** — build on Windows to get the `.exe`/install
 ### Run in development
 
 ```bash
-npm install
-npm run tauri:dev
+pnpm install
+pnpm tauri:dev
 ```
 
 This starts `next dev` (hot reload included) and opens it in a native window. The AI flow still needs `OPENROUTER_API_KEY` — same `.env.local` as the web app.
@@ -56,7 +56,7 @@ This starts `next dev` (hot reload included) and opens it in a native window. Th
 ### Build an installer
 
 ```bash
-npm run tauri:build
+pnpm tauri:build
 ```
 
 This runs `next build` with a standalone server output, bundles a copy of the local Node runtime as the app's sidecar (no system-wide Node install required on the end user's machine), and produces a platform-native installer under `src-tauri/target/release/bundle/`:
@@ -108,8 +108,8 @@ scripts/tauri/prebuild.mjs   Assembles the standalone Next.js server + sidecar N
 
 ## Scripts
 
-- `npm run dev` — start the web dev server
-- `npm run build` / `npm run start` — production build and serve (web)
-- `npm run lint` — ESLint
-- `npm run tauri:dev` — run the desktop app in development
-- `npm run tauri:build` — build the desktop installer for the current OS
+- `pnpm dev` — start the web dev server
+- `pnpm build` / `pnpm start` — production build and serve (web)
+- `pnpm lint` — ESLint
+- `pnpm tauri:dev` — run the desktop app in development
+- `pnpm tauri:build` — build the desktop installer for the current OS

@@ -10,7 +10,7 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:prepare-sidecar": "node scripts/tauri/prebuild.mjs --sidecar-only",
-    "tauri:prebuild": "next build && node scripts/tauri/prebuild.mjs",
+    "tauri:prebuild": "cross-env TAURI_BUILD=true next build && node scripts/tauri/prebuild.mjs",
     "tauri:build": "tauri build"
   },
   "dependencies": {
@@ -32,6 +32,7 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^7.0.3",
     "eslint": "^9",
     "eslint-config-next": "16.3.3",
     "tailwindcss": "^4",
