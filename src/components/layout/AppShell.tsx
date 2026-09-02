@@ -21,13 +21,13 @@ export function AppShell() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
 
-  const openNewProjectDialog = () => setDialogOpen(true);
+  const openNewSongDialog = () => setDialogOpen(true);
   const toggleSidebar = () => setSidebarOpen((current) => !current);
 
   if (!mounted) {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
-        <Header sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewProject={openNewProjectDialog} />
+        <Header sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewSong={openNewSongDialog} />
         <div className="flex flex-1" />
       </div>
     );
@@ -40,14 +40,14 @@ export function AppShell() {
       <Header
         sidebarOpen={sidebarOpen}
         onToggleSidebar={toggleSidebar}
-        onNewProject={openNewProjectDialog}
+        onNewSong={openNewSongDialog}
         showSettings={desktop}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="flex flex-1 overflow-hidden">
-        <LibrarySidebar open={sidebarOpen} onNewProject={openNewProjectDialog} />
+        <LibrarySidebar open={sidebarOpen} onNewSong={openNewSongDialog} />
         <main className="flex-1 overflow-y-auto">
-          <StudioShell onNewProject={openNewProjectDialog} />
+          <StudioShell onNewSong={openNewSongDialog} />
         </main>
       </div>
       <NewSongDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />

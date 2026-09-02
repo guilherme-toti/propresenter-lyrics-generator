@@ -64,7 +64,7 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   };
 
   return (
-    <Modal open={open} onClose={handleClose} title="Novo projeto">
+    <Modal open={open} onClose={handleClose} title="Nova música">
       <div className="space-y-4">
         <div>
           <Label htmlFor="ai-query">

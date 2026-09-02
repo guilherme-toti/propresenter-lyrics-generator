@@ -7,10 +7,10 @@ import { useLibraryStore } from "@/lib/store";
 
 interface LibrarySidebarProps {
   open: boolean;
-  onNewProject: () => void;
+  onNewSong: () => void;
 }
 
-export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
+export function LibrarySidebar({ open, onNewSong }: LibrarySidebarProps) {
   const songs = useLibraryStore((s) => s.songs);
   const activeSongId = useLibraryStore((s) => s.activeSongId);
   const selectSong = useLibraryStore((s) => s.selectSong);
@@ -40,11 +40,11 @@ export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
     >
       <div className="flex h-full w-72 flex-col p-3 pt-6">
         <button
-          onClick={onNewProject}
+          onClick={onNewSong}
           className="mb-8 flex items-center gap-2 self-start rounded-full bg-ink/5 px-4 py-2.5 text-sm font-medium text-ink transition-colors hover:bg-ink/10"
         >
           <Plus size={16} />
-          Novo projeto
+          Nova música
         </button>
 
         <p className="mb-1 px-3 text-[13px] font-semibold uppercase tracking-widest text-ink/40">Recentes</p>
@@ -52,7 +52,7 @@ export function LibrarySidebar({ open, onNewProject }: LibrarySidebarProps) {
         <div className="flex-1 space-y-0.5 overflow-y-auto">
           {songs.length === 0 && (
             <p className="rounded-lg border border-dashed border-line px-3 py-4 text-center text-xs text-ink/45">
-              Nenhuma música ainda. Comece um novo projeto.
+              Nenhuma música ainda. Adicione a primeira.
             </p>
           )}
 
