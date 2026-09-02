@@ -37,7 +37,9 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
 
   const handleGenerate = async () => {
     if (query.trim().length < 2) {
-      setError("Digite o título de uma música, um trecho da letra ou uma breve descrição.");
+      setError(
+        "Digite o título de uma música, um trecho da letra ou uma breve descrição.",
+      );
       return;
     }
     setLoading(true);
@@ -65,11 +67,15 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
     <Modal open={open} onClose={handleClose} title="Novo projeto">
       <div className="space-y-4">
         <div>
-          <Label htmlFor="ai-query">Título da música, trecho da letra ou descrição</Label>
+          <Label htmlFor="ai-query">
+            Título da música, trecho da letra ou descrição
+          </Label>
           <Input
             id="ai-query"
             autoFocus
-            placeholder={'ex.: "Oceans (Where Feet May Fail), do Hillsong" ou algumas linhas da letra'}
+            placeholder={
+              'ex.: "Oceans da banda Hillsong" ou algumas linhas da letra'
+            }
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
@@ -86,7 +92,11 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
             <PenLine size={16} />
             Criar manualmente
           </Button>
-          <Button onClick={handleGenerate} disabled={loading} className="flex-1">
+          <Button
+            onClick={handleGenerate}
+            disabled={loading}
+            className="flex-1"
+          >
             {loading ? (
               <>
                 <Loader2 size={16} className="animate-spin" />
