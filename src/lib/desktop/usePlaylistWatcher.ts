@@ -22,9 +22,17 @@ async function scanFolder(folder: string): Promise<PlaylistRef[]> {
 }
 
 /**
- * Polls the configured Playlists folder for playlists this app hasn't seen
- * before (e.g. a new one created for this week's service) and surfaces one
- * at a time for the user to optionally adopt as the export destination.
+ * Polls the configured Playlists folder — but only while the app window is
+ * focused — for playlists this app hasn't seen before (e.g. a new one
+ * created for this week's service) and surfaces one at a time for the user
+ * to optionally adopt as the export destination.
+ *
+ * Only polling while focused isn't just about saving work: it avoids
+ * catching a playlist mid-edit. If it polled in the background, switching
+ * back to the app right after renaming something in ProPresenter could
+ * surface the *old* name (whatever was on disk during that last background
+ * poll) instead of the current one — confusing. Polling on focus-gain means
+ * the check always reflects what's on disk *right when you look at it*.
  */
 export function usePlaylistWatcher() {
   const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
@@ -38,6 +46,7 @@ export function usePlaylistWatcher() {
     if (!isDesktopApp() || !playlistsFolder) return;
 
     let cancelled = false;
+    let interval: ReturnType<typeof setInterval> | null = null;
 
     const poll = async () => {
       const playlists = await scanFolder(playlistsFolder);
@@ -60,11 +69,27 @@ export function usePlaylistWatcher() {
       }
     };
 
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
+    const startPolling = () => {
+      if (interval) return;
+      poll();
+      interval = setInterval(poll, POLL_INTERVAL_MS);
+    };
+
+    const stopPolling = () => {
+      if (!interval) return;
+      clearInterval(interval);
+      interval = null;
+    };
+
+    if (document.hasFocus()) startPolling();
+    window.addEventListener("focus", startPolling);
+    window.addEventListener("blur", stopPolling);
+
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      stopPolling();
+      window.removeEventListener("focus", startPolling);
+      window.removeEventListener("blur", stopPolling);
     };
   }, [playlistsFolder, rememberKnownPlaylists, markPlaylistsBaselined]);
 
