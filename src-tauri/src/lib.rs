@@ -4,6 +4,7 @@ use std::time::{Duration, Instant};
 
 use tauri::path::BaseDirectory;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut, ShortcutState};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
@@ -55,22 +56,29 @@ pub fn run() {
                 )?;
             }
 
-            let base_url = if cfg!(debug_assertions) {
-                // `next dev` is already running by the time Tauri's devUrl check
-                // passes control here — see build.devUrl/beforeDevCommand.
-                format!("http://{LOOPBACK}:3000")
-            } else {
-                spawn_bundled_server(app.handle(), PROD_PORT)?;
-                wait_for_server(PROD_PORT, Duration::from_secs(20));
-                format!("http://{LOOPBACK}:{PROD_PORT}")
-            };
-            app.manage(BaseUrl(base_url.clone()));
-
-            WebviewWindowBuilder::new(app, "main", WebviewUrl::External(base_url.parse().unwrap()))
-                .title("PMA Lyrics Studio")
-                .inner_size(1280.0, 840.0)
-                .min_inner_size(960.0, 600.0)
-                .build()?;
+            // A crashed/aborted process gives the user nothing but a system crash
+            // reporter — a native dialog explaining what actually went wrong (and
+            // then a clean exit) is a much better failure mode than letting `?`
+            // propagate a setup error out of this closure. Tauri's own handling
+            // of *that* case aborts the whole process.
+            if let Err(err) = create_main_window(app.handle()) {
+                log::error!("failed to start: {err}");
+                // blocking_show() must not run on the main thread (it would freeze
+                // the app instead of showing anything) — off-thread, then exit once
+                // the user has dismissed it.
+                let handle = app.handle().clone();
+                let message = format!("Falha ao iniciar o app:\n\n{err}");
+                std::thread::spawn(move || {
+                    handle
+                        .dialog()
+                        .message(message)
+                        .title("PMA Lyrics Studio — Erro ao iniciar")
+                        .kind(MessageDialogKind::Error)
+                        .blocking_show();
+                    handle.exit(1);
+                });
+                return Ok(());
+            }
 
             // Best-effort: the app is fully usable without the quick-add hotkey (the
             // "Nova música" button covers the same flow), so a registration failure
@@ -91,6 +99,29 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+/// Computes the app's base URL (dev: `next dev`, already running; release:
+/// spawns the bundled sidecar server first) and opens the main window on it.
+fn create_main_window(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>> {
+    let base_url = if cfg!(debug_assertions) {
+        // `next dev` is already running by the time Tauri's devUrl check
+        // passes control here — see build.devUrl/beforeDevCommand.
+        format!("http://{LOOPBACK}:3000")
+    } else {
+        spawn_bundled_server(app, PROD_PORT)?;
+        wait_for_server(PROD_PORT, Duration::from_secs(20));
+        format!("http://{LOOPBACK}:{PROD_PORT}")
+    };
+    app.manage(BaseUrl(base_url.clone()));
+
+    WebviewWindowBuilder::new(app, "main", WebviewUrl::External(base_url.parse()?))
+        .title("PMA Lyrics Studio")
+        .inner_size(1280.0, 840.0)
+        .min_inner_size(960.0, 600.0)
+        .build()?;
+
+    Ok(())
 }
 
 /// Shows the "quick add a song" popup (global hotkey target), creating it on
