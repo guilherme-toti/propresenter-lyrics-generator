@@ -20,8 +20,11 @@ const args = process.argv.slice(2);
 const query = args.filter((a) => !a.startsWith("--")).join(" ");
 const targetLang = (args.find((a) => a.startsWith("--lang=")) ?? "--lang=en").split("=")[1];
 
-if (!apiKey || !query) {
-  console.error('Uso: MUSIXMATCH_API_KEY=xxx node scripts/musixmatch-probe.mjs "trecho da letra" [--lang=pt]');
+const forcedId = (args.find((a) => a.startsWith("--id=")) ?? "--id=").split("=")[1];
+
+if (!apiKey || (!query && !forcedId)) {
+  console.error('Uso: MUSIXMATCH_API_KEY=xxx node scripts/musixmatch-probe.mjs "trecho da letra" [--lang=en] [--genre=22]');
+  console.error('     ...ou direto numa faixa:  node scripts/musixmatch-probe.mjs --id=183507695 --lang=en');
   process.exit(1);
 }
 
@@ -84,6 +87,8 @@ const show = (label, tracks) => {
 };
 const listOf = (r) => (r.body?.track_list ?? []).map((t) => t.track);
 
+let chosenId = forcedId;
+if (!forcedId) {
 console.log(`\n=== 1. busca  "${query}"${genreId ? `  (gênero ${genreId})` : ""} ===`);
 const broad = await call("track.search", { q: query, ...filters });
 const byLyrics = await call("track.search", { q_lyrics: query, ...filters });
@@ -96,11 +101,14 @@ if (tracks.length === 0) {
   console.log("\nNenhum resultado em nenhuma das duas buscas.");
   process.exit(0);
 }
+  chosenId = String(tracks[0].commontrack_id);
+} else {
+  console.log(`\n=== 1. pulada — usando commontrack_id=${forcedId} direto ===`);
+}
 
 // 2. Full body or excerpt? This is the make-or-break question for building slides.
-const chosen = tracks[0];
-console.log(`\n=== 2. track.lyrics.get  commontrack_id=${chosen.commontrack_id} ("${chosen.track_name}") ===`);
-const lyrics = await call("track.lyrics.get", { commontrack_id: String(chosen.commontrack_id) });
+console.log(`\n=== 2. track.lyrics.get  commontrack_id=${chosenId} ===`);
+const lyrics = await call("track.lyrics.get", { commontrack_id: chosenId });
 console.log(`status: ${explain(lyrics.status)}`);
 
 const body = lyrics.body?.lyrics?.lyrics_body ?? "";
@@ -110,6 +118,12 @@ console.log(`linhas: ${lines.length} | caracteres: ${body.length}`);
 console.log(`idioma: ${lyrics.body?.lyrics?.lyrics_language ?? "?"} | restrita: ${lyrics.body?.lyrics?.restricted ?? 0}`);
 console.log(`copyright: ${lyrics.body?.lyrics?.lyrics_copyright?.trim() || "(vazio)"}`);
 console.log(`pixel de tracking: ${lyrics.body?.lyrics?.pixel_tracking_url ? "presente" : "ausente"}`);
+if (!body) {
+  console.log(
+    "\n⚠️  LETRA VAZIA — provavelmente faixa restrita (veja o copyright acima). Os passos seguintes não dizem nada;" +
+      " rode de novo com --id=<outro id da lista> para testar uma versão liberada.",
+  );
+}
 console.log(
   truncated
     ? "\n⚠️  PARECE TRUNCADA — tem marcador de excerto/uso não comercial. Nesse caso o plano não serve para montar slides."
@@ -122,7 +136,7 @@ console.log(body || "(vazia)");
 // *different* from the lyrics', or the endpoint just echoes the original back.
 console.log(`\n=== 3. track.lyrics.translation.get  (selected_language="${targetLang}") ===`);
 const translated = await call("track.lyrics.translation.get", {
-  commontrack_id: String(chosen.commontrack_id),
+  commontrack_id: chosenId,
   selected_language: targetLang,
 });
 console.log(`status: ${explain(translated.status)}`);
