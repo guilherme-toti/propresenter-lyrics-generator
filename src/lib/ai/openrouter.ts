@@ -23,10 +23,13 @@ Rules:
 - Then consider THE OTHER of the two languages, and decide whether a separate, officially RECORDED version of this song exists in it: a real released recording by a known artist or ministry — not a translation you would produce yourself. This is very common for modern worship: Hillsong, Elevation, Bethel, Passion and Maverick City songs are frequently re-recorded in Português by the same ministry or by a well-known Brazilian artist, with singable adapted lyrics that are NOT literal translations.
 - Set officialVersion.exists to true ONLY if you are confident such a recording really exists and you can name it. If you are unsure, set it to false — a clean literal translation is far better than an invented "official" version.
 - When it exists, give its released title in that language and the artist/ministry that recorded it.
-- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+- "found" is whether you actually recognise a specific, real song from this hint AND know its lyrics well enough to reproduce them. Set it to false if the hint doesn't match a song you genuinely know — smaller or recent releases, especially Brazilian worship, are often outside what you know. Saying so is the correct, useful answer: the app will ask the user to paste the lyrics instead. Never guess at a song you don't know, and never substitute a different song with a similar name.
+- When "found" is false, still fill in the other fields with your best reading of the hint, and set officialVersion.exists to false.
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it. Never address the user, ask a question, or explain yourself: the JSON object is the only thing you may output.
 
 JSON schema:
 {
+  "found": boolean,
   "title": string,
   "artist": string,
   "originalLanguage": "English" | "Português (Brasil)",
@@ -41,6 +44,7 @@ Rules:
 - Split the lyrics into sections, with one array entry per lyric line, exactly as that line would appear on a lyric slide.
 - If a section repeats later in the song — even with minor ad-lib differences — include it again as its own entry rather than skipping or referencing the earlier one.
 - Section "label" values must always be in Portuguese, regardless of the language of the lyrics — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Interlúdio", "Vamp", "Introdução", "Final".
+- NEVER write anything addressed to the user. Do not ask for the lyrics, do not ask which version/arrangement is wanted, do not offer to help, do not apologise or explain what you couldn't do. Every string you output must be an actual line of the song. If you do not know this song's real lyrics, returning an empty "sections" array is correct and expected — a message asking the user for the lyrics would be stored and presented as though it were the song itself.
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
 
 JSON schema:
@@ -81,6 +85,7 @@ Rules:
 - Within a section, "lines" must have the original and translation arrays the same length, and line i of the translation must correspond in meaning/position to line i of the original, so they can be displayed side by side.
 - If a section (like a chorus) repeats later in the song — even with minor ad-lib differences — include it again as its own entry in "sections" rather than skipping or referencing the earlier one.
 - Section "label" values must always be in Portuguese, regardless of which language the lyrics are in — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Interlúdio", "Vamp", "Introdução", "Final".
+- NEVER write anything addressed to the user. Do not ask for the lyrics, do not ask which version/arrangement is wanted, do not offer to help, do not apologise or explain what you couldn't do. Every string you output must be an actual line of the song. If you do not know this song's real lyrics, returning an empty "sections" array is correct and expected — a message asking the user for the lyrics would be stored and presented as though it were the song itself.
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
 
 JSON schema:
@@ -129,6 +134,37 @@ function extractJson(text: string): unknown {
 
 export class OpenRouterConfigError extends Error {}
 export class OpenRouterResponseError extends Error {}
+/** The model doesn't actually know this song — the user needs to paste the lyrics themselves. */
+export class OpenRouterUnknownSongError extends Error {}
+
+const UNKNOWN_SONG_MESSAGE =
+  'Não encontrei a letra dessa música — o modelo não conhece essa gravação. Use "Criar manualmente" e cole a letra nos dois idiomas.';
+
+/** A real song has more lines than this; a refusal or a "please paste the lyrics" reply has fewer. */
+const MIN_TOTAL_LINES = 4;
+/** A lyric line is short enough to fit on a slide. Prose addressed to the user is far longer. */
+const MAX_LINE_LENGTH = 160;
+
+/**
+ * Rejects a "song" that is really the model talking to the user rather than reproducing lyrics.
+ *
+ * Asked for a song it didn't know, a model answered "Preciso da letra oficial completa […] Pode
+ * colar a letra completa aqui?" — which is a perfectly schema-valid AiSongResponse, so it was
+ * saved and displayed as the song's lyrics. Zod checks the shape of a response; nothing checked
+ * that it was lyrics at all. These two structural signals catch that without keyword-matching in
+ * either language: such replies are one or two entries long, and each is a paragraph rather than
+ * a line meant for a slide.
+ */
+function assertLooksLikeLyrics(song: AiSongResponse): void {
+  const lines = song.sections.flatMap((section) => section.lines);
+  if (lines.length < MIN_TOTAL_LINES) {
+    throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
+  }
+  const longest = Math.max(...lines.flatMap((line) => [line.original.length, line.translation.length]));
+  if (longest > MAX_LINE_LENGTH) {
+    throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
+  }
+}
 
 async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise<unknown> {
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -282,11 +318,18 @@ export async function generateSongWithAi(query: string): Promise<AiSongResponse>
     console.error("song identification failed, falling back to single-call generation", error);
   }
 
+  // Taking the model at its word when it says it doesn't know the song: pressing on anyway is
+  // what produced a "song" whose only lyric was the model asking the user to paste the lyrics.
+  if (identified && !identified.found) {
+    throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
+  }
+
   if (identified?.officialVersion.exists) {
     try {
       const song = await generateFromOfficialVersion(identified);
       const result = aiSongSchema.safeParse(song);
       if (result.success) {
+        assertLooksLikeLyrics(result.data);
         return result.data;
       }
       console.error("official-version result failed validation", result.error);
@@ -297,7 +340,9 @@ export async function generateSongWithAi(query: string): Promise<AiSongResponse>
     }
   }
 
-  return translateSong(query, identified);
+  const song = await translateSong(query, identified);
+  assertLooksLikeLyrics(song);
+  return song;
 }
 
 export async function realignSongWithAi(languageARaw: string, languageBRaw: string): Promise<AiRealignResponse> {

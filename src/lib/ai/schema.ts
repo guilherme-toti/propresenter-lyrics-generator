@@ -42,6 +42,12 @@ export type AiRealignResponse = z.infer<typeof aiRealignSchema>;
  * from "can you translate this", and the reason it gets its own call. See generateSongWithAi().
  */
 export const aiIdentifySchema = z.object({
+  /**
+   * Whether the model actually recognises a specific real song here. Defaults to true so a model
+   * that just omits the field doesn't break the happy path — assertLooksLikeLyrics() is the real
+   * backstop for a model that claims to know a song and then can't produce it.
+   */
+  found: z.boolean().default(true),
   title: z.string().min(1),
   artist: z.string().default(""),
   originalLanguage: churchLanguageSchema,

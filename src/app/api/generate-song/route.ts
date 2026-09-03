@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { aiResponseToSong } from "@/lib/ai/toSong";
-import { generateSongWithAi, OpenRouterConfigError, OpenRouterResponseError } from "@/lib/ai/openrouter";
+import {
+  generateSongWithAi,
+  OpenRouterConfigError,
+  OpenRouterResponseError,
+  OpenRouterUnknownSongError,
+} from "@/lib/ai/openrouter";
 
 const requestSchema = z.object({
   query: z.string().trim().min(2, "Digite o título de uma música, um trecho da letra ou uma breve descrição."),
@@ -21,6 +26,9 @@ export async function POST(request: Request) {
   } catch (error) {
     if (error instanceof OpenRouterConfigError) {
       return NextResponse.json({ error: error.message }, { status: 501 });
+    }
+    if (error instanceof OpenRouterUnknownSongError) {
+      return NextResponse.json({ error: error.message }, { status: 404 });
     }
     if (error instanceof OpenRouterResponseError) {
       return NextResponse.json({ error: error.message }, { status: 502 });
