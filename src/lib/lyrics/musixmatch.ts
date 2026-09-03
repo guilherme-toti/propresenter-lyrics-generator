@@ -25,6 +25,75 @@ export function isMusixmatchConfigured(): boolean {
   return Boolean(process.env.MUSIXMATCH_API_KEY);
 }
 
+/** How many catalogue matches to offer the model to choose between. */
+const SEARCH_PAGE_SIZE = 5;
+
+export interface TrackCandidate {
+  commontrackId: number;
+  title: string;
+  artist: string;
+}
+
+interface SearchEnvelope {
+  message?: {
+    header?: { status_code?: number };
+    body?: {
+      track_list?: {
+        track?: { commontrack_id?: number; track_name?: string; artist_name?: string; has_lyrics?: number };
+      }[];
+    };
+  };
+}
+
+async function request<T>(path: string, params: Record<string, string>): Promise<T | null> {
+  const apiKey = process.env.MUSIXMATCH_API_KEY;
+  if (!apiKey) return null;
+
+  const url = new URL(`${API_BASE}/${path}`);
+  for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
+  url.searchParams.set("apikey", apiKey);
+
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+    if (!res.ok) {
+      console.error(`musixmatch ${path} responded ${res.status}`);
+      return null;
+    }
+    return (await res.json()) as T;
+  } catch (error) {
+    console.error(`musixmatch ${path} request failed`, error);
+    return null;
+  }
+}
+
+/**
+ * Finds real songs from the user's raw query. `q` searches titles, artists *and* lyrics at once,
+ * which is exactly the shape of what the app asks for ("a title, a lyric snippet, or a short
+ * description") — so a half-remembered line finds the song without anyone having to know its
+ * name. This is what lets a song the model has never heard of still be found: the catalogue
+ * answers "does this exist", and the model is left to choose among things that really do.
+ */
+export async function searchTracks(query: string): Promise<TrackCandidate[]> {
+  if (!query.trim()) return [];
+
+  const payload = await request<SearchEnvelope>("track.search", {
+    q: query,
+    f_has_lyrics: "1",
+    s_track_rating: "desc",
+    page_size: String(SEARCH_PAGE_SIZE),
+  });
+  if (payload?.message?.header?.status_code !== 200) return [];
+
+  return (payload.message.body?.track_list ?? [])
+    .map((entry) => entry.track)
+    .filter((track) => track?.commontrack_id && track.track_name)
+    .map((track) => ({
+      commontrackId: track!.commontrack_id!,
+      title: track!.track_name!,
+      artist: track!.artist_name ?? "",
+    }));
+}
+
 /**
  * Musixmatch answers 200 at the HTTP level and puts the real status inside the envelope, so
  * "not found" (404) and "over quota" (402) both arrive as successful responses.
@@ -60,32 +129,33 @@ function stripNonLyricFooter(body: string): string {
  * can simply fall back to asking the model.
  */
 export async function fetchLyrics(title: string, artist: string): Promise<MusixmatchLyrics | null> {
-  const apiKey = process.env.MUSIXMATCH_API_KEY;
-  if (!apiKey || !title.trim()) return null;
+  if (!title.trim()) return null;
+  const payload = await request<MusixmatchEnvelope>("matcher.lyrics.get", {
+    q_track: title,
+    ...(artist.trim() ? { q_artist: artist } : {}),
+  });
+  return readLyrics(payload, `${title} — ${artist}`);
+}
 
-  const url = new URL(`${API_BASE}/matcher.lyrics.get`);
-  url.searchParams.set("q_track", title);
-  if (artist.trim()) url.searchParams.set("q_artist", artist);
-  url.searchParams.set("apikey", apiKey);
+/**
+ * Exact lookup for a track already chosen from search results — no fuzzy title matching to get
+ * wrong a second time.
+ */
+export async function fetchLyricsByTrackId(commontrackId: number): Promise<MusixmatchLyrics | null> {
+  const payload = await request<MusixmatchEnvelope>("track.lyrics.get", {
+    commontrack_id: String(commontrackId),
+  });
+  return readLyrics(payload, `commontrack ${commontrackId}`);
+}
 
-  let payload: MusixmatchEnvelope;
-  try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    if (!res.ok) {
-      console.error(`musixmatch responded ${res.status} for ${title} — ${artist}`);
-      return null;
-    }
-    payload = (await res.json()) as MusixmatchEnvelope;
-  } catch (error) {
-    console.error("musixmatch request failed", error);
-    return null;
-  }
+function readLyrics(payload: MusixmatchEnvelope | null, label: string): MusixmatchLyrics | null {
+  if (!payload) return null;
 
   const status = payload.message?.header?.status_code;
   if (status !== 200) {
     // 404 is an ordinary miss; the rest are worth seeing in the logs (401 bad key, 402 quota,
     // 403 disabled key) because they need action rather than a fallback.
-    if (status !== 404) console.error(`musixmatch status ${status} for ${title} — ${artist}`);
+    if (status !== 404) console.error(`musixmatch status ${status} for ${label}`);
     return null;
   }
 

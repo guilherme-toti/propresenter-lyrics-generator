@@ -8,7 +8,14 @@ import {
   type AiRealignResponse,
   type AiSongResponse,
 } from "./schema";
-import { fetchLyrics, splitIntoSections, type MusixmatchLyrics } from "@/lib/lyrics/musixmatch";
+import {
+  fetchLyrics,
+  fetchLyricsByTrackId,
+  searchTracks,
+  splitIntoSections,
+  type MusixmatchLyrics,
+  type TrackCandidate,
+} from "@/lib/lyrics/musixmatch";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -25,6 +32,7 @@ Rules:
 - Set officialVersion.exists to true when the search results (or, failing that, your own knowledge) show such a recording really exists and you can name it. If nothing supports one, set it to false — a clean literal translation is far better than an invented "official" version.
 - When it exists, give its released title in that language and the artist/ministry that recorded it.
 - Web search results are provided to you. Use them: many real songs — especially smaller and recent Brazilian worship releases — will be absent from your own memory but present in the results, and the results are the more reliable source about what exists.
+- When a list of CATALOGUE MATCHES is given, those are real songs from a licensed lyrics database that already matched the hint — by title, by artist, or by the lyrics themselves. Choose the one the hint means and copy its title and artist EXACTLY as listed, and set "found" to true: the song demonstrably exists, whether or not you recognise it. Only set "found" to false if none of them is plausibly the song. Prefer a catalogue match over a song you remember with a similar name.
 - "found" is whether a specific, real song matching this hint exists. Set it to false only when the search results turn up nothing matching either — not merely because you don't recall the song yourself. When it is false the app asks the user to paste the lyrics by hand, so a wrong "false" costs them real work. Never invent a song, and never substitute a different song that merely has a similar name.
 - When "found" is false, still fill in the other fields with your best reading of the hint, and set officialVersion.exists to false.
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it. Never address the user, ask a question, or explain yourself: the JSON object is the only thing you may output.
@@ -338,6 +346,13 @@ function combineAttribution(sources: (MusixmatchLyrics | null)[]): SongAttributi
   return { provider: "musixmatch", copyright, trackingUrls };
 }
 
+/** Finds which catalogue entry the model picked, by the title it echoed back. */
+function matchCandidate(identified: AiIdentifyResponse, candidates: TrackCandidate[]): TrackCandidate | null {
+  if (candidates.length === 0) return null;
+  const wanted = identified.title.trim().toLowerCase();
+  return candidates.find((c) => c.title.trim().toLowerCase() === wanted) ?? candidates[0];
+}
+
 function otherLanguage(language: ChurchLanguage): ChurchLanguage {
   return language === "English" ? "Português (Brasil)" : "English";
 }
@@ -354,8 +369,13 @@ function lyricsToText(lyrics: AiLyricsResponse): string {
 }
 
 /** Step 1: which song is this, and does a real recording of it exist in the other language? */
-async function identifySong(query: string): Promise<AiIdentifyResponse> {
-  const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"`, "catalog");
+async function identifySong(query: string, candidates: TrackCandidate[]): Promise<AiIdentifyResponse> {
+  const catalogue = candidates.length
+    ? `\n\nCATALOGUE MATCHES (real songs from the lyrics database, best match first):\n${candidates
+        .map((c, i) => `${i + 1}. "${c.title}" — ${c.artist || "unknown artist"}`)
+        .join("\n")}`
+    : "";
+  const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"${catalogue}`, "catalog");
   const result = aiIdentifySchema.safeParse(parsed);
   if (!result.success) {
     throw malformedResponse("identify", result.error);
@@ -375,8 +395,9 @@ async function recallLyrics(
   title: string,
   artist: string,
   language: ChurchLanguage,
+  commontrackId?: number,
 ): Promise<{ lyrics: AiLyricsResponse; attribution: MusixmatchLyrics | null }> {
-  const found = await fetchLyrics(title, artist);
+  const found = commontrackId ? await fetchLyricsByTrackId(commontrackId) : await fetchLyrics(title, artist);
   if (found) {
     return { lyrics: { sections: splitIntoSections(found.text) }, attribution: found };
   }
@@ -415,12 +436,15 @@ async function pairVersions(
  * paired line-by-line with the other language" quietly forces a literal translation, because a
  * real adapted recording rarely maps 1:1 onto the original's lines.
  */
-async function generateFromOfficialVersion(identified: AiIdentifyResponse): Promise<GeneratedSong> {
+async function generateFromOfficialVersion(
+  identified: AiIdentifyResponse,
+  chosen: TrackCandidate | null,
+): Promise<GeneratedSong> {
   const targetLanguage = otherLanguage(identified.originalLanguage);
   const official = identified.officialVersion;
 
   const [originalSide, officialSide] = await Promise.all([
-    recallLyrics(identified.title, identified.artist, identified.originalLanguage),
+    recallLyrics(identified.title, identified.artist, identified.originalLanguage, chosen?.commontrackId),
     recallLyrics(official.title || identified.title, official.artist, targetLanguage),
   ]);
 
@@ -450,11 +474,17 @@ async function generateFromOfficialVersion(identified: AiIdentifyResponse): Prom
  * recalls the song and translates it. A literal translation lines up 1:1 with the original by
  * construction, so it needs no separate alignment step.
  */
-async function translateSong(query: string, identified: AiIdentifyResponse | null): Promise<GeneratedSong> {
+async function translateSong(
+  query: string,
+  identified: AiIdentifyResponse | null,
+  chosen: TrackCandidate | null,
+): Promise<GeneratedSong> {
   // With the real lyrics in hand, the model's job shrinks to translating and labelling text it
   // has been given — it never authors a line, which is where the wrong lyrics came from.
   if (identified) {
-    const found = await fetchLyrics(identified.title, identified.artist);
+    const found = chosen
+      ? await fetchLyricsByTrackId(chosen.commontrackId)
+      : await fetchLyrics(identified.title, identified.artist);
     if (found) {
       const targetLanguage = otherLanguage(identified.originalLanguage);
       const userPrompt = `These are the ${identified.originalLanguage} lyrics of ${describe(identified.title, identified.artist)}. Translate them into ${targetLanguage}.\n---\n${found.text}\n---`;
@@ -491,9 +521,14 @@ async function translateSong(query: string, identified: AiIdentifyResponse | nul
 }
 
 export async function generateSongWithAi(query: string): Promise<GeneratedSong> {
+  // The catalogue searches titles, artists and lyric text at once, so it resolves the same free
+  // text the user typed — and it knows songs the model doesn't, which is the whole reason a
+  // real Brazilian release could fail here before.
+  const candidates = await searchTracks(query);
+
   let identified: AiIdentifyResponse | null = null;
   try {
-    identified = await identifySong(query);
+    identified = await identifySong(query, candidates);
   } catch (error) {
     // Identification is an optimization, not a requirement — the single-call path below can
     // still identify the song itself, exactly as it did before this pipeline existed.
@@ -502,13 +537,19 @@ export async function generateSongWithAi(query: string): Promise<GeneratedSong> 
 
   // Taking the model at its word when it says it doesn't know the song: pressing on anyway is
   // what produced a "song" whose only lyric was the model asking the user to paste the lyrics.
-  if (identified && !identified.found) {
+  // Unless the catalogue found it regardless — the database existing is stronger evidence than
+  // the model's memory, and the lyrics will come from there anyway.
+  if (identified && !identified.found && candidates.length === 0) {
     throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
   }
 
+  // Which catalogue entry the model settled on, so the lyrics are fetched by id rather than
+  // fuzzy-matched on a title a second time.
+  const chosen = identified ? matchCandidate(identified, candidates) : (candidates[0] ?? null);
+
   if (identified?.officialVersion.exists) {
     try {
-      const generated = await generateFromOfficialVersion(identified);
+      const generated = await generateFromOfficialVersion(identified, chosen);
       const result = aiSongSchema.safeParse(generated.song);
       if (result.success) {
         assertLooksLikeLyrics(result.data);
@@ -522,7 +563,7 @@ export async function generateSongWithAi(query: string): Promise<GeneratedSong> 
     }
   }
 
-  const generated = await translateSong(query, identified);
+  const generated = await translateSong(query, identified, chosen);
   assertLooksLikeLyrics(generated.song);
   return generated;
 }
