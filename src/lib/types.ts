@@ -37,6 +37,15 @@ export interface Song {
   exportOptions: ExportOptions;
   /** Set by AI mode when the translation is a known/official version vs. machine-translated. */
   isOfficialTranslation?: boolean;
+  /**
+   * Present when the lyrics came from Musixmatch, whose terms require the copyright notice to be
+   * visible and a view to be counted wherever they are shown. See MusixmatchAttribution.
+   */
+  lyricsAttribution?: {
+    provider: "musixmatch";
+    copyright: string;
+    trackingUrls: string[];
+  };
   createdAt: number;
   updatedAt: number;
 }

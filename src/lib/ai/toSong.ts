@@ -1,6 +1,7 @@
 import { buildAlignmentFromAiSections } from "@/lib/alignment";
 import { createEmptySong, type Song } from "@/lib/types";
 import type { AiSongResponse } from "./schema";
+import type { SongAttribution } from "./openrouter";
 
 type SectionLines = { lines: { original: string; translation: string }[] };
 
@@ -24,7 +25,7 @@ function portugueseFirst(response: AiSongResponse): AiSongResponse["sections"] {
 }
 
 /** Converts a validated AI response into a ready-to-edit Song draft. */
-export function aiResponseToSong(response: AiSongResponse): Song {
+export function aiResponseToSong(response: AiSongResponse, attribution?: SongAttribution | null): Song {
   const sections = portugueseFirst(response);
   const alignment = buildAlignmentFromAiSections(sections);
 
@@ -33,6 +34,7 @@ export function aiResponseToSong(response: AiSongResponse): Song {
     artist: response.artist,
     mode: "ai",
     isOfficialTranslation: response.isOfficialTranslation,
+    ...(attribution ? { lyricsAttribution: attribution } : {}),
     languageA: reconstructRaw(sections, "original"),
     languageB: reconstructRaw(sections, "translation"),
     alignment,

@@ -22,6 +22,13 @@ export const songSchema = z.object({
   alignment: z.array(alignedLineSchema).min(1, "Alinhe pelo menos uma linha antes de exportar."),
   exportOptions: exportOptionsSchema,
   isOfficialTranslation: z.boolean().optional(),
+  lyricsAttribution: z
+    .object({
+      provider: z.literal("musixmatch"),
+      copyright: z.string(),
+      trackingUrls: z.array(z.string()),
+    })
+    .optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

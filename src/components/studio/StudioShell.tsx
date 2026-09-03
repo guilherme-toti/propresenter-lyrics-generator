@@ -6,6 +6,7 @@ import { SongMetadataCard } from "@/components/studio/SongMetadataCard";
 import { LyricsEditors } from "@/components/studio/LyricsEditors";
 import { AlignmentPreview } from "@/components/studio/AlignmentPreview";
 import { ExportFab } from "@/components/studio/ExportFab";
+import { MusixmatchAttribution } from "@/components/studio/MusixmatchAttribution";
 import { useLibraryStore } from "@/lib/store";
 
 function EmptyState({ onNewSong }: { onNewSong: () => void }) {
@@ -41,6 +42,7 @@ export function StudioShell({ onNewSong }: { onNewSong: () => void }) {
       <SongMetadataCard song={song} />
       <LyricsEditors song={song} />
       <AlignmentPreview song={song} />
+      <MusixmatchAttribution song={song} />
       <ExportFab song={song} />
     </div>
   );

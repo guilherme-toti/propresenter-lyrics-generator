@@ -8,6 +8,7 @@ import {
   type AiRealignResponse,
   type AiSongResponse,
 } from "./schema";
+import { fetchLyrics, splitIntoSections, type MusixmatchLyrics } from "@/lib/lyrics/musixmatch";
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -55,6 +56,23 @@ Rules:
 JSON schema:
 {
   "sections": [ { "label": string, "lines": [string] } ]
+}`;
+
+const STRUCTURE_TRANSLATE_SYSTEM_PROMPT = `You are given the real lyrics of a worship/congregational song in one language. Split them into sections and translate them line by line, as strict JSON for a slide-building tool.
+
+The lyrics come from a licensed lyrics database, so they are correct and complete. They are the source of truth.
+
+Rules:
+- NEVER change, "fix", reorder or drop a line of the given lyrics. Every "original" value must be a line exactly as given, in the same order.
+- Produce one "translation" for each line: a faithful, literal translation of that line, prioritising accuracy of meaning over rhyme or singability.
+- Group the lines into sections and give each a real label in Portuguese, based on the song's structure — "Verso 1", "Verso 2", "Refrão", "Pré-Refrão", "Ponte", "Interlúdio", "Vamp", "Introdução", "Final". The blank-line grouping in the input is a hint, not an instruction: a repeated block is the chorus even when the input doesn't say so.
+- Keep repeats: if a block appears twice, it appears twice in the output.
+- "original" is ALWAYS the given language and "translation" ALWAYS the other one — never swap the sides.
+- Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it. Never address the user.
+
+JSON schema:
+{
+  "sections": [ { "label": string, "lines": [ { "original": string, "translation": string } ] } ]
 }`;
 
 const PAIR_SYSTEM_PROMPT = `You pair up two officially recorded versions of the SAME worship song — one in each of two languages — line by line, so that a slide can display both at once.
@@ -295,6 +313,31 @@ async function callOpenRouter(
   return extractJson(content);
 }
 
+/**
+ * What Musixmatch requires to be shown/fired alongside the lyrics it supplied. Null when every
+ * line came from the model instead, in which case there is nothing to attribute.
+ */
+export interface SongAttribution {
+  provider: "musixmatch";
+  copyright: string;
+  trackingUrls: string[];
+}
+
+export interface GeneratedSong {
+  song: AiSongResponse;
+  attribution: SongAttribution | null;
+}
+
+function combineAttribution(sources: (MusixmatchLyrics | null)[]): SongAttribution | null {
+  const found = sources.filter((source): source is MusixmatchLyrics => source !== null);
+  if (found.length === 0) return null;
+
+  // The two sides are usually different recordings with different notices; show each once.
+  const copyright = [...new Set(found.map((s) => s.copyright).filter(Boolean))].join(" · ");
+  const trackingUrls = [...new Set(found.map((s) => s.trackingPixelUrl).filter(Boolean))];
+  return { provider: "musixmatch", copyright, trackingUrls };
+}
+
 function otherLanguage(language: ChurchLanguage): ChurchLanguage {
   return language === "English" ? "Português (Brasil)" : "English";
 }
@@ -320,8 +363,24 @@ async function identifySong(query: string): Promise<AiIdentifyResponse> {
   return result.data;
 }
 
-/** Step 2: one recording's lyrics, in one language, with nothing translated. */
-async function recallLyrics(title: string, artist: string, language: ChurchLanguage): Promise<AiLyricsResponse> {
+/**
+ * Step 2: one recording's lyrics, in one language, with nothing translated.
+ *
+ * Musixmatch first — a licensed database that either has the song or plainly doesn't, which is
+ * what "does this song exist and how does it go" actually needs. The model is the fallback for
+ * whatever the catalogue is missing or isn't licensed to hand over, which is where every wrong
+ * lyric so far has come from.
+ */
+async function recallLyrics(
+  title: string,
+  artist: string,
+  language: ChurchLanguage,
+): Promise<{ lyrics: AiLyricsResponse; attribution: MusixmatchLyrics | null }> {
+  const found = await fetchLyrics(title, artist);
+  if (found) {
+    return { lyrics: { sections: splitIntoSections(found.text) }, attribution: found };
+  }
+
   const userPrompt = `Reproduce the lyrics of the ${language} recording of ${describe(title, artist)}.\nEvery line you return must be in ${language}.`;
   const parsed = await callOpenRouter(RECALL_SYSTEM_PROMPT, userPrompt, "lyrics");
   assertNotEmptyAnswer(parsed);
@@ -329,7 +388,7 @@ async function recallLyrics(title: string, artist: string, language: ChurchLangu
   if (!result.success) {
     throw malformedResponse("recall", result.error);
   }
-  return result.data;
+  return { lyrics: result.data, attribution: null };
 }
 
 /** Step 3: line up the two recordings by musical position. */
@@ -356,24 +415,33 @@ async function pairVersions(
  * paired line-by-line with the other language" quietly forces a literal translation, because a
  * real adapted recording rarely maps 1:1 onto the original's lines.
  */
-async function generateFromOfficialVersion(identified: AiIdentifyResponse): Promise<AiSongResponse> {
+async function generateFromOfficialVersion(identified: AiIdentifyResponse): Promise<GeneratedSong> {
   const targetLanguage = otherLanguage(identified.originalLanguage);
   const official = identified.officialVersion;
 
-  const [originalLyrics, officialLyrics] = await Promise.all([
+  const [originalSide, officialSide] = await Promise.all([
     recallLyrics(identified.title, identified.artist, identified.originalLanguage),
     recallLyrics(official.title || identified.title, official.artist, targetLanguage),
   ]);
 
-  const paired = await pairVersions(originalLyrics, officialLyrics, identified.originalLanguage, targetLanguage);
+  const paired = await pairVersions(
+    originalSide.lyrics,
+    officialSide.lyrics,
+    identified.originalLanguage,
+    targetLanguage,
+  );
 
   return {
-    title: identified.title,
-    artist: identified.artist,
-    originalLanguage: identified.originalLanguage,
-    translationLanguage: targetLanguage,
-    isOfficialTranslation: true,
-    sections: paired.sections,
+    song: {
+      title: identified.title,
+      artist: identified.artist,
+      originalLanguage: identified.originalLanguage,
+      translationLanguage: targetLanguage,
+      isOfficialTranslation: true,
+      sections: paired.sections,
+    },
+    // Both sides can come from the catalogue, and each carries its own notice and view counter.
+    attribution: combineAttribution([originalSide.attribution, officialSide.attribution]),
   };
 }
 
@@ -382,7 +450,34 @@ async function generateFromOfficialVersion(identified: AiIdentifyResponse): Prom
  * recalls the song and translates it. A literal translation lines up 1:1 with the original by
  * construction, so it needs no separate alignment step.
  */
-async function translateSong(query: string, identified: AiIdentifyResponse | null): Promise<AiSongResponse> {
+async function translateSong(query: string, identified: AiIdentifyResponse | null): Promise<GeneratedSong> {
+  // With the real lyrics in hand, the model's job shrinks to translating and labelling text it
+  // has been given — it never authors a line, which is where the wrong lyrics came from.
+  if (identified) {
+    const found = await fetchLyrics(identified.title, identified.artist);
+    if (found) {
+      const targetLanguage = otherLanguage(identified.originalLanguage);
+      const userPrompt = `These are the ${identified.originalLanguage} lyrics of ${describe(identified.title, identified.artist)}. Translate them into ${targetLanguage}.\n---\n${found.text}\n---`;
+      const parsed = await callOpenRouter(STRUCTURE_TRANSLATE_SYSTEM_PROMPT, userPrompt);
+      assertNotEmptyAnswer(parsed);
+      const result = aiRealignSchema.safeParse(parsed);
+      if (result.success) {
+        return {
+          song: {
+            title: identified.title,
+            artist: identified.artist,
+            originalLanguage: identified.originalLanguage,
+            translationLanguage: targetLanguage,
+            isOfficialTranslation: false,
+            sections: result.data.sections,
+          },
+          attribution: combineAttribution([found]),
+        };
+      }
+      console.error("structure/translate failed validation, falling back to full generation", result.error);
+    }
+  }
+
   const hint = identified
     ? `Song hint: "${query}"\nThe song has already been identified as ${describe(identified.title, identified.artist)}, originally in ${identified.originalLanguage} — use that identification.`
     : `Song hint: "${query}"`;
@@ -392,10 +487,10 @@ async function translateSong(query: string, identified: AiIdentifyResponse | nul
   if (!result.success) {
     throw malformedResponse("translate", result.error);
   }
-  return result.data;
+  return { song: result.data, attribution: null };
 }
 
-export async function generateSongWithAi(query: string): Promise<AiSongResponse> {
+export async function generateSongWithAi(query: string): Promise<GeneratedSong> {
   let identified: AiIdentifyResponse | null = null;
   try {
     identified = await identifySong(query);
@@ -413,11 +508,11 @@ export async function generateSongWithAi(query: string): Promise<AiSongResponse>
 
   if (identified?.officialVersion.exists) {
     try {
-      const song = await generateFromOfficialVersion(identified);
-      const result = aiSongSchema.safeParse(song);
+      const generated = await generateFromOfficialVersion(identified);
+      const result = aiSongSchema.safeParse(generated.song);
       if (result.success) {
         assertLooksLikeLyrics(result.data);
-        return result.data;
+        return { song: result.data, attribution: generated.attribution };
       }
       console.error("official-version result failed validation", result.error);
     } catch (error) {
@@ -427,9 +522,9 @@ export async function generateSongWithAi(query: string): Promise<AiSongResponse>
     }
   }
 
-  const song = await translateSong(query, identified);
-  assertLooksLikeLyrics(song);
-  return song;
+  const generated = await translateSong(query, identified);
+  assertLooksLikeLyrics(generated.song);
+  return generated;
 }
 
 export async function realignSongWithAi(languageARaw: string, languageBRaw: string): Promise<AiRealignResponse> {

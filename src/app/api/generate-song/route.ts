@@ -20,8 +20,8 @@ export async function POST(request: Request) {
   }
 
   try {
-    const aiResponse = await generateSongWithAi(parsed.data.query);
-    const song = aiResponseToSong(aiResponse);
+    const { song: aiResponse, attribution } = await generateSongWithAi(parsed.data.query);
+    const song = aiResponseToSong(aiResponse, attribution);
     return NextResponse.json({ song });
   } catch (error) {
     if (error instanceof OpenRouterConfigError) {
