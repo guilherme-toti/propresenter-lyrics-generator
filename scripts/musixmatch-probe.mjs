@@ -18,7 +18,7 @@ const API = "https://api.musixmatch.com/ws/1.1";
 const apiKey = process.env.MUSIXMATCH_API_KEY;
 const args = process.argv.slice(2);
 const query = args.filter((a) => !a.startsWith("--")).join(" ");
-const targetLang = (args.find((a) => a.startsWith("--lang=")) ?? "--lang=pt").split("=")[1];
+const targetLang = (args.find((a) => a.startsWith("--lang=")) ?? "--lang=en").split("=")[1];
 
 if (!apiKey || !query) {
   console.error('Uso: MUSIXMATCH_API_KEY=xxx node scripts/musixmatch-probe.mjs "trecho da letra" [--lang=pt]');
@@ -67,21 +67,35 @@ async function call(path, params) {
   return { status, body: json?.message?.body, httpStatus: res.status };
 }
 
-// 1. Search by whatever the user typed: q covers title, artist and lyrics at once.
-console.log(`\n=== 1. track.search  q="${query}" ===`);
-const search = await call("track.search", { q: query, f_has_lyrics: "1", page_size: "5" });
-console.log(`status: ${explain(search.status)}`);
+// 1. `q` searches titles, artists and lyrics together and weights titles heavily, which is why
+// a lyric snippet can return songs whose *title* merely resembles it. `q_lyrics` searches the
+// lyrics index alone. Run both on the same input so the difference is visible.
+const genreId = (args.find((a) => a.startsWith("--genre=")) ?? "--genre=").split("=")[1];
+const filters = { f_has_lyrics: "1", page_size: "5", ...(genreId ? { f_music_genre_id: genreId } : {}) };
 
-const tracks = (search.body?.track_list ?? []).map((t) => t.track);
+const show = (label, tracks) => {
+  console.log(`\n--- ${label} ---`);
+  if (tracks.length === 0) return console.log("(nenhum resultado)");
+  tracks.forEach((t, i) =>
+    console.log(
+      `${i + 1}. "${t.track_name}" — ${t.artist_name}  [id=${t.commontrack_id}, idioma=${t.lyrics_language || "?"}]`,
+    ),
+  );
+};
+const listOf = (r) => (r.body?.track_list ?? []).map((t) => t.track);
+
+console.log(`\n=== 1. busca  "${query}"${genreId ? `  (gênero ${genreId})` : ""} ===`);
+const broad = await call("track.search", { q: query, ...filters });
+const byLyrics = await call("track.search", { q_lyrics: query, ...filters });
+show(`q (título + artista + letra)  [${explain(broad.status)}]`, listOf(broad));
+show(`q_lyrics (só letra)  [${explain(byLyrics.status)}]`, listOf(byLyrics));
+
+// Prefer the lyrics-only hit when there is one — that's the hypothesis under test.
+const tracks = listOf(byLyrics).length ? listOf(byLyrics) : listOf(broad);
 if (tracks.length === 0) {
-  console.log("Nenhum resultado — o catálogo não achou essa música por esse texto.");
+  console.log("\nNenhum resultado em nenhuma das duas buscas.");
   process.exit(0);
 }
-tracks.forEach((t, i) =>
-  console.log(
-    `${i + 1}. "${t.track_name}" — ${t.artist_name}  [commontrack_id=${t.commontrack_id}, idioma=${t.lyrics_language ?? "?"}]`,
-  ),
-);
 
 // 2. Full body or excerpt? This is the make-or-break question for building slides.
 const chosen = tracks[0];
@@ -104,17 +118,30 @@ console.log(
 console.log("\n--- letra recebida ---");
 console.log(body || "(vazia)");
 
-// 3. Translations: the endpoint exists, but the docs don't name the language parameter.
-console.log(`\n=== 3. track.lyrics.translation.get  (tentando idioma "${targetLang}") ===`);
-for (const paramName of ["selected_language", "language", "translation_language"]) {
-  const translated = await call("track.lyrics.translation.get", {
-    commontrack_id: String(chosen.commontrack_id),
-    [paramName]: targetLang,
-  });
-  const translation = translated.body?.lyrics?.lyrics_body ?? translated.body?.translations_list ?? "";
-  const text = typeof translation === "string" ? translation : JSON.stringify(translation).slice(0, 300);
-  console.log(`\n${paramName}: status ${explain(translated.status)} | ${text ? `${text.length} chars` : "vazio"}`);
-  if (text) console.log(text.slice(0, 400));
-}
+// 3. selected_language is the parameter (the alternatives answered 400). Ask for a language
+// *different* from the lyrics', or the endpoint just echoes the original back.
+console.log(`\n=== 3. track.lyrics.translation.get  (selected_language="${targetLang}") ===`);
+const translated = await call("track.lyrics.translation.get", {
+  commontrack_id: String(chosen.commontrack_id),
+  selected_language: targetLang,
+});
+console.log(`status: ${explain(translated.status)}`);
+// The docs promise "both the lyrics and its translation" but never name the fields, so print
+// the structure instead of guessing which one holds the translated text.
+console.log("\nEstrutura da resposta:");
+console.log(JSON.stringify(translated.body, null, 2).slice(0, 2500));
 
-console.log("\nPronto. O que importa: (2) veio completa? (3) algum dos parâmetros trouxe tradução?");
+// 4. The genre ids available for f_music_genre_id, so the search can be narrowed to worship.
+console.log("\n=== 4. music.genres.get — gêneros com cara de cristão/gospel ===");
+const genres = await call("music.genres.get", {});
+const list = (genres.body?.music_genre_list ?? [])
+  .map((g) => g.music_genre)
+  .filter((g) => /christ|gospel|religio|worship|espirit/i.test(g?.music_genre_name ?? ""));
+if (list.length === 0) console.log("(nenhum correspondeu — rode com --all-genres para ver todos)");
+list.forEach((g) => console.log(`id=${g.music_genre_id}  ${g.music_genre_name}`));
+if (args.includes("--all-genres")) {
+  console.log("\n--- todos ---");
+  (genres.body?.music_genre_list ?? []).forEach((g) =>
+    console.log(`id=${g.music_genre.music_genre_id}  ${g.music_genre.music_genre_name}`),
+  );
+}
