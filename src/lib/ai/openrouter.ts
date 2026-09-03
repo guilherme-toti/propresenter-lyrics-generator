@@ -145,6 +145,29 @@ export class OpenRouterUnknownSongError extends Error {}
 const UNKNOWN_SONG_MESSAGE =
   'Não encontrei a letra dessa música — o modelo não conhece essa gravação. Use "Criar manualmente" e cole a letra nos dois idiomas.';
 
+/**
+ * The lyric prompts tell the model that returning no sections is the right way to say it can't
+ * find the song — so an empty array is an answer, not a malformed response, and has to be read
+ * as one before the schema rejects it for being too short.
+ */
+function assertNotEmptyAnswer(parsed: unknown): void {
+  const sections = (parsed as { sections?: unknown } | null)?.sections;
+  if (Array.isArray(sections) && sections.length === 0) {
+    throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
+  }
+}
+
+/**
+ * Zod's message is a JSON dump of the failing path — useful in a log, meaningless to someone
+ * who just wanted a song, and it was being shown to them verbatim.
+ */
+function malformedResponse(context: string, error: unknown): OpenRouterResponseError {
+  console.error(`${context} failed schema validation`, error);
+  return new OpenRouterResponseError(
+    "A IA respondeu num formato inesperado. Tente de novo — se continuar, use \"Criar manualmente\".",
+  );
+}
+
 /** A real song has more lines than this; a refusal or a "please paste the lyrics" reply has fewer. */
 const MIN_TOTAL_LINES = 4;
 /** A lyric line is short enough to fit on a slide. Prose addressed to the user is far longer. */
@@ -292,7 +315,7 @@ async function identifySong(query: string): Promise<AiIdentifyResponse> {
   const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"`, "catalog");
   const result = aiIdentifySchema.safeParse(parsed);
   if (!result.success) {
-    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+    throw malformedResponse("identify", result.error);
   }
   return result.data;
 }
@@ -301,9 +324,10 @@ async function identifySong(query: string): Promise<AiIdentifyResponse> {
 async function recallLyrics(title: string, artist: string, language: ChurchLanguage): Promise<AiLyricsResponse> {
   const userPrompt = `Reproduce the lyrics of the ${language} recording of ${describe(title, artist)}.\nEvery line you return must be in ${language}.`;
   const parsed = await callOpenRouter(RECALL_SYSTEM_PROMPT, userPrompt, "lyrics");
+  assertNotEmptyAnswer(parsed);
   const result = aiLyricsSchema.safeParse(parsed);
   if (!result.success) {
-    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+    throw malformedResponse("recall", result.error);
   }
   return result.data;
 }
@@ -317,9 +341,10 @@ async function pairVersions(
 ): Promise<AiRealignResponse> {
   const userPrompt = `Version A — ${originalLanguage} (this is the "original" side):\n---\n${lyricsToText(original)}\n---\n\nVersion B — ${targetLanguage} (this is the "translation" side):\n---\n${lyricsToText(officialVersion)}\n---`;
   const parsed = await callOpenRouter(PAIR_SYSTEM_PROMPT, userPrompt);
+  assertNotEmptyAnswer(parsed);
   const result = aiRealignSchema.safeParse(parsed);
   if (!result.success) {
-    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+    throw malformedResponse("pair", result.error);
   }
   return result.data;
 }
@@ -362,9 +387,10 @@ async function translateSong(query: string, identified: AiIdentifyResponse | nul
     ? `Song hint: "${query}"\nThe song has already been identified as ${describe(identified.title, identified.artist)}, originally in ${identified.originalLanguage} — use that identification.`
     : `Song hint: "${query}"`;
   const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, hint, "lyrics");
+  assertNotEmptyAnswer(parsed);
   const result = aiSongSchema.safeParse(parsed);
   if (!result.success) {
-    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+    throw malformedResponse("translate", result.error);
   }
   return result.data;
 }
@@ -411,7 +437,7 @@ export async function realignSongWithAi(languageARaw: string, languageBRaw: stri
   const parsed = await callOpenRouter(REALIGN_SYSTEM_PROMPT, userPrompt);
   const result = aiRealignSchema.safeParse(parsed);
   if (!result.success) {
-    throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
+    throw malformedResponse("realign", result.error);
   }
   return result.data;
 }
