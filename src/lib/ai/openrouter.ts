@@ -182,6 +182,21 @@ function assertLooksLikeLyrics(song: AiSongResponse): void {
  */
 const SEARCH_MAX_RESULTS = 3;
 
+/**
+ * Which engine actually runs depends on the configured model: OpenAI, Anthropic, Google and
+ * Perplexity models use the provider's own native search, everything else falls back to Exa.
+ * That split matters for the options below — `include_domains` is honoured by OpenAI's native
+ * search (`exclude_domains` is not, which is why it isn't used here), while `max_results` is an
+ * Exa-engine knob and is inert on a native provider. `search_context_size` is the native
+ * equivalent: "high" for lyrics, where a truncated snippet is useless because the whole point is
+ * to come away with the complete song; "medium" for identification, which only has to establish
+ * that a recording exists and what it's called.
+ */
+const SEARCH_CONTEXT_SIZE: Record<SearchScope, "low" | "medium" | "high"> = {
+  lyrics: "high",
+  catalog: "medium",
+};
+
 const SEARCH_DOMAINS: Record<SearchScope, string[]> = {
   lyrics: ["letras.mus.br", "vagalume.com.br", "cifraclub.com.br", "genius.com", "azlyrics.com"],
   catalog: [
@@ -237,6 +252,7 @@ async function callOpenRouter(
                 include_domains: SEARCH_DOMAINS[search],
               },
             ],
+            web_search_options: { search_context_size: SEARCH_CONTEXT_SIZE[search] },
           }
         : {}),
     }),
