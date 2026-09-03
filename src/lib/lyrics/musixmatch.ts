@@ -113,7 +113,13 @@ async function searchWith(params: Record<string, string>): Promise<TrackCandidat
   const payload = await request<SearchEnvelope>("track.search", {
     ...params,
     f_has_lyrics: "1",
-    s_track_rating: "desc",
+    // No s_track_rating here on purpose: it's documented as sorting the whole result set by
+    // popularity, not as a relevance tiebreaker — it replaces relevance ordering rather than
+    // refining it. With it set, searching "oceans hillsong" returned unrelated but broadly
+    // popular tracks (a generic pop song, a random rock track, "God Bless America") instead of
+    // Hillsong UNITED's "Oceans" — the query was clearly still matching loosely underneath, but
+    // popularity was deciding the order shown. Omitting it leaves the API's default relevance
+    // ranking in charge, which is what the search actually needs to be useful.
     page_size: String(SEARCH_PAGE_SIZE),
   });
   if (payload?.message?.header?.status_code !== 200) return [];
