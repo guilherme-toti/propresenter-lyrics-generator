@@ -268,7 +268,7 @@ async function callOpenRouter(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new OpenRouterConfigError(
-      "A variável OPENROUTER_API_KEY não está configurada. Adicione-a ao arquivo .env.local (veja .env.example).",
+      "A chave da OpenRouter não está configurada. No app instalado, use Ajustes → Chave da OpenRouter; na versão web, defina OPENROUTER_API_KEY no ambiente.",
     );
   }
   // Everything here rests on how well the model *remembers* specific recordings — including
@@ -524,11 +524,12 @@ async function translateSong(
   return { song: result.data, attribution: null };
 }
 
-export async function generateSongWithAi(query: string): Promise<GeneratedSong> {
-  // The catalogue searches titles, artists and lyric text at once, so it resolves the same free
-  // text the user typed — and it knows songs the model doesn't, which is the whole reason a
-  // real Brazilian release could fail here before.
-  const candidates = await searchTracks(query);
+export async function generateSongWithAi(query: string, picked?: TrackCandidate): Promise<GeneratedSong> {
+  // A recording the user picked from the catalogue settles "which song" outright — no search,
+  // and nothing left for the model to choose between. Otherwise the catalogue searches titles,
+  // artists and lyric text at once, resolving the same free text the user typed, and knowing
+  // songs the model doesn't.
+  const candidates = picked ? [picked] : await searchTracks(query);
 
   let identified: AiIdentifyResponse | null = null;
   try {

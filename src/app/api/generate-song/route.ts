@@ -10,6 +10,15 @@ import {
 
 const requestSchema = z.object({
   query: z.string().trim().min(2, "Digite o título de uma música, um trecho da letra ou uma breve descrição."),
+  /** Set when the user picked a specific recording from the catalogue search. */
+  picked: z
+    .object({
+      commontrackId: z.number(),
+      title: z.string(),
+      artist: z.string(),
+      language: z.string().default(""),
+    })
+    .optional(),
 });
 
 export async function POST(request: Request) {
@@ -20,7 +29,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { song: aiResponse, attribution } = await generateSongWithAi(parsed.data.query);
+    const { song: aiResponse, attribution } = await generateSongWithAi(parsed.data.query, parsed.data.picked);
     const song = aiResponseToSong(aiResponse, attribution);
     return NextResponse.json({ song });
   } catch (error) {
