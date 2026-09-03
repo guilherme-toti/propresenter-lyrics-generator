@@ -21,7 +21,7 @@ export interface ExportOptions {
 }
 
 export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
-  linesPerSlide: 1,
+  linesPerSlide: 2,
 };
 
 export interface Song {
