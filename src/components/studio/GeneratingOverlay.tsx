@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, PenLine } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 
+// Deliberately vague about direction: a song can be generated either way round (an English
+// song gets a Português version, a Brazilian one gets English), so naming a target language
+// here would be wrong half the time.
 const STATUS_MESSAGES = [
   "Procurando a música…",
   "Conferindo a letra original…",
-  "Traduzindo para português…",
+  "Traduzindo…",
   "Alinhando linha por linha…",
   "Quase lá…",
 ];
@@ -41,9 +44,10 @@ interface GeneratingOverlayProps {
   query: string;
   error: string | null;
   onDismiss: () => void;
+  onCreateManually: () => void;
 }
 
-export function GeneratingOverlay({ query, error, onDismiss }: GeneratingOverlayProps) {
+export function GeneratingOverlay({ query, error, onDismiss, onCreateManually }: GeneratingOverlayProps) {
   const [messageIndex, setMessageIndex] = useState(0);
 
   useEffect(() => {
@@ -62,9 +66,16 @@ export function GeneratingOverlay({ query, error, onDismiss }: GeneratingOverlay
         </div>
         <h2 className="font-display text-2xl font-semibold text-ink">Não foi dessa vez</h2>
         <p className="max-w-sm text-sm text-ink/55">{error}</p>
-        <Button className="mt-2" variant="secondary" onClick={onDismiss}>
-          Fechar
-        </Button>
+        <div className="mt-2 flex gap-2">
+          <Button variant="secondary" onClick={onDismiss}>
+            Fechar
+          </Button>
+          {/* The way out of a song the AI can't find: this failure is otherwise a dead end. */}
+          <Button variant="primary" onClick={onCreateManually}>
+            <PenLine size={16} />
+            Criar manualmente
+          </Button>
+        </div>
       </div>
     );
   }

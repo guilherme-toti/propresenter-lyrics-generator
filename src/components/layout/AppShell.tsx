@@ -14,6 +14,7 @@ import { useHasMounted } from "@/lib/useHasMounted";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { useGenerationStore } from "@/lib/generationStore";
+import { useLibraryStore } from "@/lib/store";
 import { usePlaylistWatcher } from "@/lib/desktop/usePlaylistWatcher";
 import { useQuickAddListener } from "@/lib/desktop/useQuickAddListener";
 import { useValidateActivePlaylist } from "@/lib/desktop/useValidateActivePlaylist";
@@ -32,6 +33,14 @@ export function AppShell() {
   const generationQuery = useGenerationStore((s) => s.query);
   const generationError = useGenerationStore((s) => s.error);
   const dismissGeneration = useGenerationStore((s) => s.finish);
+  const createSong = useLibraryStore((s) => s.createSong);
+
+  // Escape hatch from a failed generation: start the blank song the user would otherwise
+  // have to go back and ask for through "Nova música" → "Criar manualmente".
+  const createManuallyFromFailure = () => {
+    createSong({ mode: "manual" });
+    dismissGeneration();
+  };
   useQuickAddListener();
 
   const openNewSongDialog = () => setDialogOpen(true);
@@ -62,7 +71,12 @@ export function AppShell() {
         <LibrarySidebar open={sidebarOpen} onNewSong={openNewSongDialog} />
         <main className="flex-1 overflow-y-auto">
           {generationQuery ? (
-            <GeneratingOverlay query={generationQuery} error={generationError} onDismiss={dismissGeneration} />
+            <GeneratingOverlay
+              query={generationQuery}
+              error={generationError}
+              onDismiss={dismissGeneration}
+              onCreateManually={createManuallyFromFailure}
+            />
           ) : (
             <StudioShell onNewSong={openNewSongDialog} />
           )}

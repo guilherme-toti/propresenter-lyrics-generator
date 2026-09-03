@@ -21,9 +21,10 @@ Rules:
 - Identify the single most likely song and its artist/writer from the hint.
 - "originalLanguage" is the language the song's real, original lyrics were written and recorded in — it must be either "English" or "Português (Brasil)". (If the song was actually written in a third language, pick whichever of those two has the best-known official congregational recording.)
 - Then consider THE OTHER of the two languages, and decide whether a separate, officially RECORDED version of this song exists in it: a real released recording by a known artist or ministry — not a translation you would produce yourself. This is very common for modern worship: Hillsong, Elevation, Bethel, Passion and Maverick City songs are frequently re-recorded in Português by the same ministry or by a well-known Brazilian artist, with singable adapted lyrics that are NOT literal translations.
-- Set officialVersion.exists to true ONLY if you are confident such a recording really exists and you can name it. If you are unsure, set it to false — a clean literal translation is far better than an invented "official" version.
+- Set officialVersion.exists to true when the search results (or, failing that, your own knowledge) show such a recording really exists and you can name it. If nothing supports one, set it to false — a clean literal translation is far better than an invented "official" version.
 - When it exists, give its released title in that language and the artist/ministry that recorded it.
-- "found" is whether you actually recognise a specific, real song from this hint AND know its lyrics well enough to reproduce them. Set it to false if the hint doesn't match a song you genuinely know — smaller or recent releases, especially Brazilian worship, are often outside what you know. Saying so is the correct, useful answer: the app will ask the user to paste the lyrics instead. Never guess at a song you don't know, and never substitute a different song with a similar name.
+- Web search results are provided to you. Use them: many real songs — especially smaller and recent Brazilian worship releases — will be absent from your own memory but present in the results, and the results are the more reliable source about what exists.
+- "found" is whether a specific, real song matching this hint exists. Set it to false only when the search results turn up nothing matching either — not merely because you don't recall the song yourself. When it is false the app asks the user to paste the lyrics by hand, so a wrong "false" costs them real work. Never invent a song, and never substitute a different song that merely has a similar name.
 - When "found" is false, still fill in the other fields with your best reading of the hint, and set officialVersion.exists to false.
 - Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it. Never address the user, ask a question, or explain yourself: the JSON object is the only thing you may output.
 
@@ -36,9 +37,13 @@ JSON schema:
   "officialVersion": { "exists": boolean, "title": string, "artist": string }
 }`;
 
-const RECALL_SYSTEM_PROMPT = `You reproduce the lyrics of one specific worship/congregational song recording, from memory, formatted as strict JSON for a slide-building tool.
+const RECALL_SYSTEM_PROMPT = `You reproduce the lyrics of one specific worship/congregational song recording, formatted as strict JSON for a slide-building tool.
+
+Web search results are provided to you. Work from them: they are far more reliable than your own recollection, especially for Brazilian worship releases you may not know at all. Fall back on memory only when the results don't cover the song.
 
 Rules:
+- Take the lyrics from the search results whenever they contain this song, copying the words exactly as published there. Lyrics pages carry things that are not lyrics — navigation, ads, "Ver mais", chord letters above the words, comments, translations offered alongside the original, repeated-chorus markers like "(2x)" or "[Refrão]". Keep only the sung words; use the markers to understand the structure, not as lines.
+- If the results show more than one version of the song, use the one that matches the requested language and recording, not whichever appears first.
 - Reproduce the lyrics of the requested recording, in the requested language, exactly as they are actually sung on it. Do NOT translate anything, and do NOT substitute a version in a different language — if you are asked for the Português (Brasil) recording, every line you return must be in Português (Brasil).
 - ALWAYS reproduce the FULL, most complete version of the song exactly as actually recorded/performed — not a shortened, radio-edit, or "first chorus only" version. Modern worship songs are very often extended live arrangements with many more sections than a simple verse/chorus structure: multiple verses, pre-chorus, chorus, bridge, refrain, interlude, vamp, tag/outro, post-chorus, key/vocalist changes, and several repeats of the chorus or bridge (sometimes with slightly different ad-libs each time). If you recognize the song as having such an extended arrangement, include ALL of it, in the correct order, not just the first pass through each section — this matters far more than keeping the response short.
 - Split the lyrics into sections, with one array entry per lyric line, exactly as that line would appear on a lyric slide.
@@ -166,7 +171,36 @@ function assertLooksLikeLyrics(song: AiSongResponse): void {
   }
 }
 
-async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise<unknown> {
+/**
+ * OpenRouter's web plugin, billed per result — so each search is scoped to what that step
+ * actually needs. See https://openrouter.ai/docs/features/web-search.
+ *
+ * "lyrics" restricts to sites that publish full lyrics, since an unrestricted search for a
+ * song title mostly returns streaming/store pages with no words on them. "catalog" is for the
+ * identification step instead, which asks whether a recording *exists* — a question streaming
+ * platforms and label pages answer better than lyrics sites do.
+ */
+const SEARCH_MAX_RESULTS = 3;
+
+const SEARCH_DOMAINS: Record<SearchScope, string[]> = {
+  lyrics: ["letras.mus.br", "vagalume.com.br", "cifraclub.com.br", "genius.com", "azlyrics.com"],
+  catalog: [
+    "open.spotify.com",
+    "music.apple.com",
+    "youtube.com",
+    "letras.mus.br",
+    "genius.com",
+    "cifraclub.com.br",
+  ],
+};
+
+type SearchScope = "lyrics" | "catalog";
+
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  search?: SearchScope,
+): Promise<unknown> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new OpenRouterConfigError(
@@ -194,6 +228,17 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string): Promise
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
+      ...(search
+        ? {
+            plugins: [
+              {
+                id: "web",
+                max_results: SEARCH_MAX_RESULTS,
+                include_domains: SEARCH_DOMAINS[search],
+              },
+            ],
+          }
+        : {}),
     }),
   });
 
@@ -228,7 +273,7 @@ function lyricsToText(lyrics: AiLyricsResponse): string {
 
 /** Step 1: which song is this, and does a real recording of it exist in the other language? */
 async function identifySong(query: string): Promise<AiIdentifyResponse> {
-  const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"`);
+  const parsed = await callOpenRouter(IDENTIFY_SYSTEM_PROMPT, `Song hint: "${query}"`, "catalog");
   const result = aiIdentifySchema.safeParse(parsed);
   if (!result.success) {
     throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
@@ -239,7 +284,7 @@ async function identifySong(query: string): Promise<AiIdentifyResponse> {
 /** Step 2: one recording's lyrics, in one language, with nothing translated. */
 async function recallLyrics(title: string, artist: string, language: ChurchLanguage): Promise<AiLyricsResponse> {
   const userPrompt = `Reproduce the lyrics of the ${language} recording of ${describe(title, artist)}.\nEvery line you return must be in ${language}.`;
-  const parsed = await callOpenRouter(RECALL_SYSTEM_PROMPT, userPrompt);
+  const parsed = await callOpenRouter(RECALL_SYSTEM_PROMPT, userPrompt, "lyrics");
   const result = aiLyricsSchema.safeParse(parsed);
   if (!result.success) {
     throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
@@ -300,7 +345,7 @@ async function translateSong(query: string, identified: AiIdentifyResponse | nul
   const hint = identified
     ? `Song hint: "${query}"\nThe song has already been identified as ${describe(identified.title, identified.artist)}, originally in ${identified.originalLanguage} — use that identification.`
     : `Song hint: "${query}"`;
-  const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, hint);
+  const parsed = await callOpenRouter(GENERATE_SYSTEM_PROMPT, hint, "lyrics");
   const result = aiSongSchema.safeParse(parsed);
   if (!result.success) {
     throw new OpenRouterResponseError(`A resposta da IA não seguiu o formato esperado: ${result.error.message}`);
