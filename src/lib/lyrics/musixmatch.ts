@@ -32,6 +32,8 @@ export interface TrackCandidate {
   commontrackId: number;
   title: string;
   artist: string;
+  /** Two-letter code from the catalogue ("pt", "en"), or empty when it isn't tagged. */
+  language: string;
 }
 
 interface SearchEnvelope {
@@ -39,7 +41,13 @@ interface SearchEnvelope {
     header?: { status_code?: number };
     body?: {
       track_list?: {
-        track?: { commontrack_id?: number; track_name?: string; artist_name?: string; has_lyrics?: number };
+        track?: {
+          commontrack_id?: number;
+          track_name?: string;
+          artist_name?: string;
+          has_lyrics?: number;
+          lyrics_language?: string;
+        };
       }[];
     };
   };
@@ -76,8 +84,34 @@ async function request<T>(path: string, params: Record<string, string>): Promise
 export async function searchTracks(query: string): Promise<TrackCandidate[]> {
   if (!query.trim()) return [];
 
+  // Both searches, always, because each one fails badly at the other's job and the app can't
+  // know which kind of thing was typed. Measured against this catalogue: the snippet "estou
+  // preparando um caminho endireitando as veredas" returns, under `q`, songs merely *titled*
+  // "Estou Te Preparando" — and under `q_lyrics`, the three recordings of the song that line
+  // actually opens. A title behaves the other way round.
+  const [byTitle, byLyrics] = await Promise.all([
+    searchWith({ q: query }),
+    searchWith({ q_lyrics: query }),
+  ]);
+
+  // Interleaved rather than concatenated: whichever search understood the query has its best
+  // result at the top either way, instead of the wrong one owning the whole first page.
+  const merged: TrackCandidate[] = [];
+  const seen = new Set<number>();
+  for (let i = 0; i < Math.max(byLyrics.length, byTitle.length); i += 1) {
+    for (const candidate of [byLyrics[i], byTitle[i]]) {
+      if (candidate && !seen.has(candidate.commontrackId)) {
+        seen.add(candidate.commontrackId);
+        merged.push(candidate);
+      }
+    }
+  }
+  return merged;
+}
+
+async function searchWith(params: Record<string, string>): Promise<TrackCandidate[]> {
   const payload = await request<SearchEnvelope>("track.search", {
-    q: query,
+    ...params,
     f_has_lyrics: "1",
     s_track_rating: "desc",
     page_size: String(SEARCH_PAGE_SIZE),
@@ -91,7 +125,26 @@ export async function searchTracks(query: string): Promise<TrackCandidate[]> {
       commontrackId: track!.commontrack_id!,
       title: track!.track_name!,
       artist: track!.artist_name ?? "",
+      language: track!.lyrics_language ?? "",
     }));
+}
+
+/**
+ * Walks the candidates until one actually yields lyrics.
+ *
+ * Rank says nothing about availability: searching that same snippet, the top hit was a version
+ * of the right song whose lyrics are withheld ("Unfortunately we're not authorized to show
+ * these lyrics") while the third was complete. Giving up on the first restricted track would
+ * throw away a song the catalogue does have.
+ */
+export async function fetchFirstAvailable(
+  candidates: TrackCandidate[],
+): Promise<{ lyrics: MusixmatchLyrics; track: TrackCandidate } | null> {
+  for (const track of candidates) {
+    const lyrics = await fetchLyricsByTrackId(track.commontrackId);
+    if (lyrics) return { lyrics, track };
+  }
+  return null;
 }
 
 /**

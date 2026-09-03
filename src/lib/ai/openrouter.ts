@@ -9,8 +9,8 @@ import {
   type AiSongResponse,
 } from "./schema";
 import {
+  fetchFirstAvailable,
   fetchLyrics,
-  fetchLyricsByTrackId,
   searchTracks,
   splitIntoSections,
   type MusixmatchLyrics,
@@ -395,9 +395,13 @@ async function recallLyrics(
   title: string,
   artist: string,
   language: ChurchLanguage,
-  commontrackId?: number,
+  candidates?: TrackCandidate[],
 ): Promise<{ lyrics: AiLyricsResponse; attribution: MusixmatchLyrics | null }> {
-  const found = commontrackId ? await fetchLyricsByTrackId(commontrackId) : await fetchLyrics(title, artist);
+  // A restricted track is not a missing song: keep walking the list before giving up on the
+  // catalogue, since another recording of the same song is usually available.
+  const found = candidates?.length
+    ? (await fetchFirstAvailable(candidates))?.lyrics ?? null
+    : await fetchLyrics(title, artist);
   if (found) {
     return { lyrics: { sections: splitIntoSections(found.text) }, attribution: found };
   }
@@ -438,13 +442,13 @@ async function pairVersions(
  */
 async function generateFromOfficialVersion(
   identified: AiIdentifyResponse,
-  chosen: TrackCandidate | null,
+  ordered: TrackCandidate[],
 ): Promise<GeneratedSong> {
   const targetLanguage = otherLanguage(identified.originalLanguage);
   const official = identified.officialVersion;
 
   const [originalSide, officialSide] = await Promise.all([
-    recallLyrics(identified.title, identified.artist, identified.originalLanguage, chosen?.commontrackId),
+    recallLyrics(identified.title, identified.artist, identified.originalLanguage, ordered),
     recallLyrics(official.title || identified.title, official.artist, targetLanguage),
   ]);
 
@@ -477,13 +481,13 @@ async function generateFromOfficialVersion(
 async function translateSong(
   query: string,
   identified: AiIdentifyResponse | null,
-  chosen: TrackCandidate | null,
+  ordered: TrackCandidate[],
 ): Promise<GeneratedSong> {
   // With the real lyrics in hand, the model's job shrinks to translating and labelling text it
   // has been given — it never authors a line, which is where the wrong lyrics came from.
   if (identified) {
-    const found = chosen
-      ? await fetchLyricsByTrackId(chosen.commontrackId)
+    const found = ordered.length
+      ? (await fetchFirstAvailable(ordered))?.lyrics ?? null
       : await fetchLyrics(identified.title, identified.artist);
     if (found) {
       const targetLanguage = otherLanguage(identified.originalLanguage);
@@ -543,13 +547,14 @@ export async function generateSongWithAi(query: string): Promise<GeneratedSong> 
     throw new OpenRouterUnknownSongError(UNKNOWN_SONG_MESSAGE);
   }
 
-  // Which catalogue entry the model settled on, so the lyrics are fetched by id rather than
-  // fuzzy-matched on a title a second time.
+  // The entry the model settled on leads, with the remaining matches behind it as fallbacks for
+  // when its lyrics turn out to be withheld.
   const chosen = identified ? matchCandidate(identified, candidates) : (candidates[0] ?? null);
+  const ordered = chosen ? [chosen, ...candidates.filter((c) => c !== chosen)] : candidates;
 
   if (identified?.officialVersion.exists) {
     try {
-      const generated = await generateFromOfficialVersion(identified, chosen);
+      const generated = await generateFromOfficialVersion(identified, ordered);
       const result = aiSongSchema.safeParse(generated.song);
       if (result.success) {
         assertLooksLikeLyrics(result.data);
@@ -563,7 +568,7 @@ export async function generateSongWithAi(query: string): Promise<GeneratedSong> 
     }
   }
 
-  const generated = await translateSong(query, identified, chosen);
+  const generated = await translateSong(query, identified, ordered);
   assertLooksLikeLyrics(generated.song);
   return generated;
 }
