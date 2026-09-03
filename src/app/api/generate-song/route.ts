@@ -17,6 +17,7 @@ const requestSchema = z.object({
       title: z.string(),
       artist: z.string(),
       language: z.string().default(""),
+      trackRating: z.number().default(0),
     })
     .optional(),
 });

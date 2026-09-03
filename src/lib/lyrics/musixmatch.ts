@@ -25,8 +25,14 @@ export function isMusixmatchConfigured(): boolean {
   return Boolean(process.env.MUSIXMATCH_API_KEY);
 }
 
-/** How many catalogue matches to offer the model to choose between. */
-const SEARCH_PAGE_SIZE = 5;
+/**
+ * How many catalogue matches to fetch per search mode (by title, by lyrics). Wide enough that the
+ * recording musixmatch.com itself calls "best result" — which ranks by relevance first, then
+ * promotes the most popular match — is actually in the pool: probing "estou preparando um
+ * caminho endireitando as veredas" against a real key, the site's best result ranked 7th by raw
+ * `q_lyrics` relevance. See `combineSearchResults` for the promotion itself.
+ */
+const SEARCH_PAGE_SIZE = 15;
 
 export interface TrackCandidate {
   commontrackId: number;
@@ -34,6 +40,8 @@ export interface TrackCandidate {
   artist: string;
   /** Two-letter code from the catalogue ("pt", "en"), or empty when it isn't tagged. */
   language: string;
+  /** Musixmatch's own popularity index for this recording. Used to pick a "best result". */
+  trackRating: number;
 }
 
 interface SearchEnvelope {
@@ -47,6 +55,7 @@ interface SearchEnvelope {
           artist_name?: string;
           has_lyrics?: number;
           lyrics_language?: string;
+          track_rating?: number;
         };
       }[];
     };
@@ -94,12 +103,33 @@ export async function searchTracks(query: string): Promise<TrackCandidate[]> {
     searchWith({ q_lyrics: query }),
   ]);
 
-  // Interleaved rather than concatenated: whichever search understood the query has its best
-  // result at the top either way, instead of the wrong one owning the whole first page.
+  return combineSearchResults(byLyrics, byTitle);
+}
+
+/**
+ * Musixmatch's own relevance ranking is purely textual — it doesn't know "É Ele" by Drops INA is
+ * the recording most people mean, only that three different recordings match equally well. The
+ * website's search resolves that by promoting whichever match is most popular within the
+ * relevance-ranked results; the public API exposes no such blend (`s_track_rating` replaces
+ * relevance instead of refining it — see the comment on `searchWith`). This reproduces the
+ * website's behaviour: keep relevance order, but move the most popular match of each search mode
+ * to the front before combining the two lists.
+ *
+ * The two searches are then interleaved rather than concatenated, so whichever mode understood
+ * the query has its best (now popularity-promoted) result at the top either way, instead of the
+ * wrong one owning the whole first page.
+ */
+export function combineSearchResults(
+  byLyrics: TrackCandidate[],
+  byTitle: TrackCandidate[],
+): TrackCandidate[] {
+  const lyricsRanked = promoteMostPopular(byLyrics);
+  const titleRanked = promoteMostPopular(byTitle);
+
   const merged: TrackCandidate[] = [];
   const seen = new Set<number>();
-  for (let i = 0; i < Math.max(byLyrics.length, byTitle.length); i += 1) {
-    for (const candidate of [byLyrics[i], byTitle[i]]) {
+  for (let i = 0; i < Math.max(lyricsRanked.length, titleRanked.length); i += 1) {
+    for (const candidate of [lyricsRanked[i], titleRanked[i]]) {
       if (candidate && !seen.has(candidate.commontrackId)) {
         seen.add(candidate.commontrackId);
         merged.push(candidate);
@@ -107,6 +137,21 @@ export async function searchTracks(query: string): Promise<TrackCandidate[]> {
     }
   }
   return merged;
+}
+
+function promoteMostPopular(candidates: TrackCandidate[]): TrackCandidate[] {
+  if (candidates.length === 0) return candidates;
+
+  let bestIndex = 0;
+  for (let i = 1; i < candidates.length; i += 1) {
+    if (candidates[i].trackRating > candidates[bestIndex].trackRating) bestIndex = i;
+  }
+  if (bestIndex === 0) return candidates;
+
+  const reordered = [...candidates];
+  const [promoted] = reordered.splice(bestIndex, 1);
+  reordered.unshift(promoted);
+  return reordered;
 }
 
 async function searchWith(params: Record<string, string>): Promise<TrackCandidate[]> {
@@ -132,6 +177,7 @@ async function searchWith(params: Record<string, string>): Promise<TrackCandidat
       title: track!.track_name!,
       artist: track!.artist_name ?? "",
       language: track!.lyrics_language ?? "",
+      trackRating: track!.track_rating ?? 0,
     }));
 }
 
