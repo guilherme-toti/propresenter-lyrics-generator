@@ -3,10 +3,12 @@ name: Release desktop app
 # Builds and publishes signed Windows/macOS/Linux installers whenever a
 # "vX.Y.Z" tag is pushed — bump the version in src-tauri/tauri.conf.json
 # first (it must match the tag) so the updater can tell this is newer than
-# what's already installed. Creates a DRAFT GitHub Release: review the
-# generated notes/assets and publish it manually — publishing is what makes
-# the updater endpoint (releases/latest/download/latest.json) start serving
-# this version to already-installed apps.
+# what's already installed. Creates a DRAFT GitHub Release, then — only if
+# every platform in the matrix below built successfully — the `publish` job
+# publishes it automatically. Publishing is what makes the updater endpoint
+# (releases/latest/download/latest.json) start serving this version to
+# already-installed apps; if any platform fails, the draft is left alone so
+# a broken release never goes out silently.
 on:
   push:
     tags:
@@ -72,3 +74,13 @@ jobs:
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
+
+  publish:
+    needs: release
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish the draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release edit "${{ github.ref_name }}" --draft=false --repo "${{ github.repository }}"
