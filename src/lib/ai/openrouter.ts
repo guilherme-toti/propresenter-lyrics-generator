@@ -1,5 +1,6 @@
 import {
   aiLanguageSchema,
+  aiLineLanguagesSchema,
   aiLiteralTranslationSchema,
   aiRealignWireSchema,
   expandWireSections,
@@ -237,6 +238,38 @@ async function identifyLanguageOnly(picked: TrackCandidate, originalLyrics: stri
     throw malformedResponse("identify-language", result.error);
   }
   return result.data.originalLanguage;
+}
+
+/**
+ * Used only for lines the pt/en heuristic in languageDetect.ts couldn't
+ * confidently classify on its own (see classifyLineLanguages()) — a real
+ * imported .pro's blank/very short lines, not a translation task.
+ */
+const CLASSIFY_LINES_SYSTEM_PROMPT = `You are given a numbered list of short lines from song lyrics. Classify each line as either "pt" (Português) or "en" (English) — every line must get one of these two tags, even a short or ambiguous-looking one; make your best guess rather than refusing.
+
+This tool is used by a bilingual church that only ever needs these two languages.
+
+Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it. The "tags" array must have exactly as many entries as lines given, in the same order.
+
+JSON schema:
+{
+  "tags": ["pt" | "en", ...]
+}`;
+
+/** Resolves only the lines languageDetect.ts's heuristic tagged "ambiguous" — see its own doc
+ * comment for why this two-tier approach exists instead of always calling AI. */
+export async function classifyLineLanguages(lines: string[], signal?: AbortSignal): Promise<("pt" | "en")[]> {
+  if (lines.length === 0) return [];
+  const userPrompt = lines.map((line, i) => `${i + 1}. ${line}`).join("\n");
+  const parsed = await callOpenRouter(CLASSIFY_LINES_SYSTEM_PROMPT, userPrompt, LANGUAGE_ONLY_MODEL, signal);
+  const result = aiLineLanguagesSchema.safeParse(parsed);
+  if (!result.success) {
+    throw malformedResponse("classify-line-languages", result.error);
+  }
+  if (result.data.tags.length !== lines.length) {
+    throw new OpenRouterResponseError("A IA retornou uma quantidade de resultados diferente da esperada.");
+  }
+  return result.data.tags;
 }
 
 function finalizeSong(
