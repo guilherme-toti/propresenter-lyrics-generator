@@ -37,6 +37,9 @@ yarn-error.log*
 # vercel
 .vercel
 
+# superpowers subagent-driven-development workspaces (scratch: ledgers, briefs, review packages)
+/.superpowers/
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts

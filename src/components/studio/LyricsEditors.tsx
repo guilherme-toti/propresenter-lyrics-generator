@@ -65,14 +65,14 @@ export function LyricsEditors({ song }: { song: Song }) {
   }, [song.id]);
 
   const handleRawChange = (side: "languageA" | "languageB", value: string) => {
-    setLanguageRaw(song.id, side, value);
+    setLanguageRaw(side, value);
 
     // Only auto-realign once an alignment already exists — the first pass stays an explicit,
     // deliberate action via the "Alinhar letra" button below.
     if (!hasAlignment) return;
     if (autoRealignTimer.current) clearTimeout(autoRealignTimer.current);
     autoRealignTimer.current = setTimeout(() => {
-      realignFromManualText(song.id);
+      realignFromManualText();
     }, AUTO_REALIGN_DELAY_MS);
   };
 
@@ -89,7 +89,7 @@ export function LyricsEditors({ song }: { song: Song }) {
       if (!res.ok) {
         throw new Error(data.error ?? "Algo deu errado.");
       }
-      applyAiRealignment(song.id, data);
+      applyAiRealignment(data);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Algo deu errado.");
     } finally {
@@ -105,7 +105,7 @@ export function LyricsEditors({ song }: { song: Song }) {
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
         <div className="flex justify-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => realignFromManualText(song.id)}>
+          <Button variant="secondary" size="sm" onClick={() => realignFromManualText()}>
             <RefreshCw size={13} />
             {hasAlignment ? "Realinhar a partir do texto" : "Alinhar letra"}
           </Button>

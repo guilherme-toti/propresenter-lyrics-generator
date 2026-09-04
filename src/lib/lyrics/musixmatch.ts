@@ -44,6 +44,19 @@ export interface TrackCandidate {
   trackRating: number;
 }
 
+/**
+ * Maps a Musixmatch language tag (often a bare "en"/"pt", sometimes regional like "pt-br" or
+ * "en-US", sometimes missing entirely) to one of the app's two supported church languages.
+ * Matches by the tag's first two letters rather than exact equality, and returns null rather
+ * than guessing when the tag is empty or neither English nor Portuguese.
+ */
+export function mapMusixmatchLanguage(tag: string): "English" | "Português (Brasil)" | null {
+  const prefix = tag.trim().slice(0, 2).toLowerCase();
+  if (prefix === "en") return "English";
+  if (prefix === "pt") return "Português (Brasil)";
+  return null;
+}
+
 interface SearchEnvelope {
   message?: {
     header?: { status_code?: number };
@@ -56,6 +69,7 @@ interface SearchEnvelope {
           has_lyrics?: number;
           lyrics_language?: string;
           track_rating?: number;
+          restricted?: number;
         };
       }[];
     };
@@ -171,7 +185,11 @@ async function searchWith(params: Record<string, string>): Promise<TrackCandidat
 
   return (payload.message.body?.track_list ?? [])
     .map((entry) => entry.track)
-    .filter((track) => track?.commontrack_id && track.track_name)
+    // has_lyrics=1 only means Musixmatch has *a* lyrics entry for this recording, not that it's
+    // actually retrievable — restricted tracks ("not authorized to show these lyrics") show up in
+    // search with their own restricted flag, and picking one always fails downstream, so they're
+    // filtered here rather than left for the user to discover by clicking.
+    .filter((track) => track?.commontrack_id && track.track_name && !track.restricted)
     .map((track) => ({
       commontrackId: track!.commontrack_id!,
       title: track!.track_name!,
@@ -179,24 +197,6 @@ async function searchWith(params: Record<string, string>): Promise<TrackCandidat
       language: track!.lyrics_language ?? "",
       trackRating: track!.track_rating ?? 0,
     }));
-}
-
-/**
- * Walks the candidates until one actually yields lyrics.
- *
- * Rank says nothing about availability: searching that same snippet, the top hit was a version
- * of the right song whose lyrics are withheld ("Unfortunately we're not authorized to show
- * these lyrics") while the third was complete. Giving up on the first restricted track would
- * throw away a song the catalogue does have.
- */
-export async function fetchFirstAvailable(
-  candidates: TrackCandidate[],
-): Promise<{ lyrics: MusixmatchLyrics; track: TrackCandidate } | null> {
-  for (const track of candidates) {
-    const lyrics = await fetchLyricsByTrackId(track.commontrackId);
-    if (lyrics) return { lyrics, track };
-  }
-  return null;
 }
 
 /**
@@ -253,6 +253,59 @@ export async function fetchLyricsByTrackId(commontrackId: number): Promise<Musix
   return readLyrics(payload, `commontrack ${commontrackId}`);
 }
 
+interface TranslationEnvelope {
+  message?: {
+    header?: { status_code?: number };
+    body?: {
+      lyrics?: {
+        lyrics_copyright?: string;
+        lyrics_translated?: {
+          lyrics_body?: string;
+          pixel_tracking_url?: string;
+          restricted?: number;
+        };
+      };
+    };
+  };
+}
+
+/**
+ * Musixmatch's own translation of a specific recording's lyrics — literal/mechanical, not the
+ * officially recorded adapted version (confirmed by probing: asking for Hillsong "Oceans" in `pt`
+ * returns a word-for-word rendering, not the real sung "Oceanos"). Coverage is inconsistent too —
+ * empty/restricted for less mainstream catalogue entries. So this is a fallback source, never a
+ * replacement for finding a real official recording — see generateSongWithAi in openrouter.ts.
+ * Returns null on the same conditions as fetchLyrics/fetchLyricsByTrackId: no key, no match,
+ * restricted, quota, network trouble.
+ */
+export async function fetchTranslation(
+  commontrackId: number,
+  targetLanguage: "en" | "pt",
+): Promise<MusixmatchLyrics | null> {
+  const payload = await request<TranslationEnvelope>("track.lyrics.translation.get", {
+    commontrack_id: String(commontrackId),
+    selected_language: targetLanguage,
+  });
+  if (!payload) return null;
+
+  const status = payload.message?.header?.status_code;
+  if (status !== 200) {
+    if (status !== 404) console.error(`musixmatch translation status ${status} for commontrack ${commontrackId}`);
+    return null;
+  }
+
+  const lyrics = payload.message?.body?.lyrics;
+  const translated = lyrics?.lyrics_translated;
+  const text = stripNonLyricFooter(translated?.lyrics_body ?? "");
+  if (!text || translated?.restricted) return null;
+
+  return {
+    text,
+    copyright: lyrics?.lyrics_copyright?.trim() ?? "",
+    trackingPixelUrl: translated?.pixel_tracking_url ?? "",
+  };
+}
+
 function readLyrics(payload: MusixmatchEnvelope | null, label: string): MusixmatchLyrics | null {
   if (!payload) return null;
 
@@ -278,8 +331,8 @@ function readLyrics(payload: MusixmatchEnvelope | null, label: string): Musixmat
 
 /**
  * Musixmatch returns a plain lyric body: lines separated by newlines, sections by blank lines,
- * with no section names. Labels are left generic here and named properly later by the model,
- * which sees both language versions and can tell a chorus from a verse.
+ * with no section names. No model ever sees this song on the Musixmatch-translation path
+ * (pairLineAligned below), so these generic "Parte N" labels are final.
  */
 export function splitIntoSections(text: string): { label: string; lines: string[] }[] {
   return text
@@ -287,4 +340,36 @@ export function splitIntoSections(text: string): { label: string; lines: string[
     .map((block) => block.split("\n").map((line) => line.trim()).filter(Boolean))
     .filter((lines) => lines.length > 0)
     .map((lines, index) => ({ label: `Parte ${index + 1}`, lines }));
+}
+
+/**
+ * Musixmatch's own translation of a track is a literal, in-place rendering of the same body: same
+ * blank-line section breaks, same line count per section, in the same order (confirmed by
+ * probing). That means it can be paired with the original by position alone — no AI needed —
+ * whenever the two actually line up. Returns null (never a best-effort partial pairing) when they
+ * don't: a section-count or line-count mismatch means this isn't really a line-for-line rendering
+ * of this exact body, and the caller should fall back to an AI translation instead of showing
+ * misaligned lines.
+ */
+export function pairLineAligned(
+  originalText: string,
+  translatedText: string,
+): { label: string; lines: { original: string; translation: string }[] }[] | null {
+  const originalSections = splitIntoSections(originalText);
+  const translatedSections = splitIntoSections(translatedText);
+  if (originalSections.length === 0 || originalSections.length !== translatedSections.length) {
+    return null;
+  }
+
+  const paired: { label: string; lines: { original: string; translation: string }[] }[] = [];
+  for (let i = 0; i < originalSections.length; i += 1) {
+    const originalLines = originalSections[i].lines;
+    const translatedLines = translatedSections[i].lines;
+    if (originalLines.length !== translatedLines.length) return null;
+    paired.push({
+      label: originalSections[i].label,
+      lines: originalLines.map((original, j) => ({ original, translation: translatedLines[j] })),
+    });
+  }
+  return paired;
 }

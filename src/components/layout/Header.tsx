@@ -1,10 +1,8 @@
 "use client";
 
-import { Menu, Plus, Settings } from "lucide-react";
+import { Plus, Settings } from "lucide-react";
 
 interface HeaderProps {
-  sidebarOpen: boolean;
-  onToggleSidebar: () => void;
   onNewSong: () => void;
   // The desktop app's window title bar already shows this — repeating it
   // here would be a visible duplicate, so AppShell only sets this on web.
@@ -13,24 +11,9 @@ interface HeaderProps {
   onOpenSettings?: () => void;
 }
 
-export function Header({
-  sidebarOpen,
-  onToggleSidebar,
-  onNewSong,
-  showTitle = true,
-  showSettings,
-  onOpenSettings,
-}: HeaderProps) {
+export function Header({ onNewSong, showTitle = true, showSettings, onOpenSettings }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 border-b border-line bg-cream-50 px-4 py-3">
-      <button
-        onClick={onToggleSidebar}
-        aria-label={sidebarOpen ? "Fechar biblioteca" : "Abrir biblioteca"}
-        aria-pressed={sidebarOpen}
-        className="rounded-full p-2 text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
-      >
-        <Menu size={18} />
-      </button>
       {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
       <div className="flex-1" />
       {showSettings && (

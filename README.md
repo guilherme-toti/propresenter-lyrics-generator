@@ -6,7 +6,7 @@ Turn a song into a bilingual (Português/English), line-by-line lyric alignment 
 
 Every song goes through the same pipeline — **align → preview → export** — but there are two ways to get to the alignment:
 
-- **Generate with AI** (default, recommended) — type a song title, a lyric snippet, or a short description. This is sent to an LLM via [OpenRouter](https://openrouter.ai), which identifies the song and produces a Português/English pair already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting. See [How "Generate with AI" finds a translation](#how-generate-with-ai-finds-a-translation) for what happens between those two steps.
+- **Generate with AI** (default, recommended) — search the Musixmatch catalogue by song title or a lyric snippet, then pick the exact recording from the results (if nothing matches, or the catalogue isn't configured, "Criar manualmente" is the only option). Picking a recording settles which song it is outright — from there an LLM via [OpenRouter](https://openrouter.ai) only decides the picked recording's language and whether a separately-recorded official version exists in the other language, and produces a Português/English pair already split into sections and aligned line-by-line (Editor A always ends up Português, regardless of which language the song was actually written in). You land straight on the alignment preview to review before exporting. See [How "Generate with AI" finds a translation](#how-generate-with-ai-finds-a-translation) for what happens between those two steps.
 - **Create manually** — paste one language into Editor A and the other into Editor B (blank line = new section), then click "Alinhar letra" to pair them line-by-line and section-by-section, editable afterwards. Once aligned, "Realinhar com IA" can send both texts back through the LLM to fix missing lines, duplicates, or misalignment.
 
 From there, both flows share the same alignment editor (reorder, split, merge, or retitle any section) and the same **Export → .pro** step, which builds a real ProPresenter 7 presentation: one slide per group of N lines, grouped into ProPresenter slide groups per section, with the song's CCLI/title/artist/key metadata attached.
@@ -15,11 +15,11 @@ From there, both flows share the same alignment editor (reorder, split, merge, o
 
 Worship songs in this repertoire usually have *two real recordings* rather than a song and a translation of it — "Oceans" (Hillsong UNITED) also exists as the officially recorded "Oceanos", whose Portuguese lyrics are a singable adaptation, not a literal translation. Asking one LLM call for "the lyrics, already paired line-by-line with the other language" quietly forces the literal translation instead: a real adapted recording rarely maps 1:1 onto the original's lines, so a model told to produce matching pairs will translate rather than recall. Recall and alignment therefore happen in separate steps (`src/lib/ai/openrouter.ts`):
 
-1. **Identify** — which song is this, what language was it originally recorded in, and does a separately *recorded* official version exist in the other language (in whichever direction: an English song's Português version, or a Português song's English one)? Small, fast call. It's told to answer "no" whenever it isn't sure, since an invented "official" version is worse than an honest literal translation.
-2. **Recall** — if such a recording exists, both versions' lyrics are recalled independently, each by its own released title, in parallel. Neither call is allowed to translate anything.
+1. **Identify** — the song itself is already certain (it's the recording you picked); this call only decides what language its lyrics are actually in, and whether a separately *recorded* official version exists in the other language (in whichever direction: an English song's Português version, or a Português song's English one). Small, fast call. It's told to answer "no" whenever it isn't sure, since an invented "official" version is worse than an honest literal translation.
+2. **Recall** — the picked recording's own lyrics come straight from Musixmatch by its exact catalogue ID — no AI call, nothing to "recall". Only when an official version is confirmed to exist is *it* recalled: first via a fuzzy Musixmatch lookup by its released title and artist, falling back to an AI call only if that lookup finds nothing. Neither source is allowed to translate anything.
 3. **Pair** — a third call lines the two versions up by *musical position* (which line is sung at the same moment), preserving both recordings' wording verbatim and only filling in a literal translation where one version genuinely has no counterpart line.
 
-When no official recording is found — the common case for smaller songs — none of that runs: it falls back to a single call that recalls and literally translates, which lines up 1:1 by construction. Every failure in the multi-step path degrades to that same fallback, so the feature can only add quality, never break generation. The song's metadata card shows which path produced it ("tradução oficial" vs "tradução por IA").
+When no official recording is found — the common case for smaller songs — none of that runs: it falls back to Musixmatch's own translation of the exact picked recording first, which costs zero AI calls and lines up 1:1 by construction whenever it exists and the line/section counts match. Only when Musixmatch has nothing usable does it ask the model to translate the picked recording's lyrics literally. Every failure in the multi-step path degrades to that same fallback, so the feature can only add quality, never break generation. The song's metadata card shows which path produced it ("tradução oficial" vs "tradução por IA").
 
 All of this rests on how well the configured model *remembers* specific recordings, so `OPENROUTER_MODEL` is the setting most worth experimenting with — small models tend not to know Português worship adaptations and will silently substitute a literal translation of their own.
 
@@ -108,27 +108,21 @@ Open **Ajustes** (the gear icon in the header — desktop app only) to configure
 
 **Why the export doesn't write directly into the playlist itself:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`) that references presentations elsewhere on disk. Editing that document from outside ProPresenter while it might be open and live-presenting risks corrupting it or losing the change to ProPresenter's own autosave. Writing into the Library instead is the same effect with none of that risk: the file appears where ProPresenter already expects new presentations, and dragging it into the current playlist is one click. If the playlist you had selected gets deleted or renamed before your next export, the app notices and asks you to pick another before it writes the file.
 
-### Quick-add: a global hotkey for songs you didn't plan for
-
-Press **`Ctrl+Alt+Shift+N`** (`⌃⌥⇧N` on macOS) from anywhere — the app doesn't need to be focused, or even visible — and a small popup appears with just a text field: type a title, lyric snippet, or description and hit Enter. That's for the moment the band starts a song that isn't in your library yet: no need to switch away from ProPresenter, bring the full app to the front, and click through "Nova música" first.
-
-The popup only captures the query and kicks off "Generate with AI"; once the song's ready, the popup closes, the main window comes to the front, and the new song is open in the alignment editor exactly like the normal "Nova música" flow — same review step before exporting. Esc, or clicking away, dismisses the popup without doing anything.
-
 ## Project structure
 
 ```
-src/app/                     Routes: the studio page, quick-add popup page, API routes (generate-song, export/propresenter)
+src/app/                     Routes: the studio page, API routes (generate-song, export/propresenter)
 src/components/studio/       New-song dialog, lyric editors, alignment preview, export panel
 src/components/library/      Sidebar listing saved songs (Zustand-persisted)
 src/lib/alignment.ts         Pure functions: splitting lyrics into sections, pairing lines, slide grouping
 src/lib/ai/                  OpenRouter prompt/schema/response → Song mapping
-src/lib/useGenerateSong.ts   Shared "Generate with AI" flow, used by both the in-app dialog and the quick-add popup
+src/lib/useGenerateSong.ts   Shared "Generate with AI" flow
 src/lib/propresenter/        .pro document builder/encoder, Playlist document scanner/decoder, protobuf schema loaders
 src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library/Playlists folders, active playlist)
-src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), useQuickAddListener (cross-window handoff), envFile.ts (reads/writes the desktop .env — API key)
+src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), envFile.ts (reads/writes the desktop .env — API key)
 src/components/settings/     Ajustes dialog + the shared playlist picker modal
 vendor/propresenter7-proto/  Vendored ProPresenter 7 .proto schema (unofficial, reverse-engineered)
-src-tauri/                   Tauri (Rust) desktop shell — bundled server, native windows, global hotkey, folder-picker dialog
+src-tauri/                   Tauri (Rust) desktop shell — bundled server, native windows, folder-picker dialog
 scripts/tauri/prebuild.mjs   Assembles the standalone Next.js server + sidecar Node binary before a Tauri build
 ```
 

@@ -8,13 +8,13 @@ import { groupIntoSlides } from "@/lib/alignment";
 import { useLibraryStore } from "@/lib/store";
 import type { AlignedLine, Song } from "@/lib/types";
 
-function SectionDivider({ song, row }: { song: Song; row: AlignedLine }) {
+function SectionDivider({ row }: { row: AlignedLine }) {
   const editSectionLabel = useLibraryStore((s) => s.editSectionLabel);
   return (
     <div className="my-2 flex items-center gap-2 rounded-lg bg-ink px-3 py-1.5">
       <Input
         value={row.sectionLabel ?? ""}
-        onChange={(e) => editSectionLabel(song.id, row.id, e.target.value)}
+        onChange={(e) => editSectionLabel(row.id, e.target.value)}
         placeholder="Seção"
         className="!w-auto border-0 bg-transparent !py-0.5 text-[13px] font-semibold uppercase tracking-widest text-white placeholder:text-white/50 focus:ring-0"
       />
@@ -22,7 +22,7 @@ function SectionDivider({ song, row }: { song: Song; row: AlignedLine }) {
   );
 }
 
-function AlignmentRow({ song, row }: { song: Song; row: AlignedLine }) {
+function AlignmentRow({ row }: { row: AlignedLine }) {
   const editRow = useLibraryStore((s) => s.editRow);
   const addRowAfter = useLibraryStore((s) => s.addRowAfter);
   const removeRow = useLibraryStore((s) => s.removeRow);
@@ -33,36 +33,36 @@ function AlignmentRow({ song, row }: { song: Song; row: AlignedLine }) {
     <div className="group flex items-stretch bg-white">
       <input
         value={row.a}
-        onChange={(e) => editRow(song.id, row.id, "a", e.target.value)}
+        onChange={(e) => editRow(row.id, "a", e.target.value)}
         placeholder="—"
         className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm text-ink outline-none"
       />
       <input
         value={row.b}
-        onChange={(e) => editRow(song.id, row.id, "b", e.target.value)}
+        onChange={(e) => editRow(row.id, "b", e.target.value)}
         placeholder="—"
         className="min-w-0 flex-1 border-l border-line bg-transparent px-3 py-2 text-sm text-ink outline-none"
       />
       <div className="flex shrink-0 items-center gap-0.5 border-l border-line px-1 opacity-0 transition-opacity group-hover:opacity-100">
         <button
           title="Iniciar uma nova seção aqui"
-          onClick={() => toggleRowSectionBreak(song.id, row.id)}
+          onClick={() => toggleRowSectionBreak(row.id)}
           className={cnIconBtn(row.sectionBreakBefore)}
         >
           <Scissors size={12} />
         </button>
-        <button title="Mover para cima" onClick={() => moveRowInSong(song.id, row.id, "up")} className={cnIconBtn(false)}>
+        <button title="Mover para cima" onClick={() => moveRowInSong(row.id, "up")} className={cnIconBtn(false)}>
           <ArrowUp size={12} />
         </button>
-        <button title="Mover para baixo" onClick={() => moveRowInSong(song.id, row.id, "down")} className={cnIconBtn(false)}>
+        <button title="Mover para baixo" onClick={() => moveRowInSong(row.id, "down")} className={cnIconBtn(false)}>
           <ArrowDown size={12} />
         </button>
-        <button title="Inserir linha abaixo" onClick={() => addRowAfter(song.id, row.id)} className={cnIconBtn(false)}>
+        <button title="Inserir linha abaixo" onClick={() => addRowAfter(row.id)} className={cnIconBtn(false)}>
           <Plus size={12} />
         </button>
         <button
           title="Excluir linha"
-          onClick={() => removeRow(song.id, row.id)}
+          onClick={() => removeRow(row.id)}
           className={cnIconBtn(false) + " hover:!bg-red-50 hover:!text-red-600"}
         >
           <Trash2 size={12} />
@@ -113,7 +113,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
             max={8}
             value={linesPerSlide}
             onChange={(e) =>
-              updateSong(song.id, {
+              updateSong({
                 exportOptions: { ...song.exportOptions, linesPerSlide: Math.max(1, Number(e.target.value) || 1) },
               })
             }
@@ -134,10 +134,10 @@ export function AlignmentPreview({ song }: { song: Song }) {
           const firstRow = chunk[0];
           return (
             <Fragment key={firstRow.id}>
-              {firstRow.sectionBreakBefore && <SectionDivider song={song} row={firstRow} />}
+              {firstRow.sectionBreakBefore && <SectionDivider row={firstRow} />}
               <div className="divide-y divide-line overflow-hidden rounded-lg border border-line">
                 {chunk.map((row) => (
-                  <AlignmentRow key={row.id} song={song} row={row} />
+                  <AlignmentRow key={row.id} row={row} />
                 ))}
               </div>
             </Fragment>

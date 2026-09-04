@@ -24,6 +24,25 @@ export const DEFAULT_EXPORT_OPTIONS: ExportOptions = {
   linesPerSlide: 2,
 };
 
+/** The specific catalogue recording behind one side's lyrics — lets the studio label that side
+ * ("Baseado em: X — Y") and is what a per-side "buscar gravação" swap replaces. */
+export interface SideSource {
+  commontrackId: number;
+  title: string;
+  artist: string;
+}
+
+/**
+ * Present per side whenever its current text came from Musixmatch, whose terms require the
+ * copyright notice to be visible and a view to be counted wherever it's shown. Independent of
+ * SideSource: a literal Musixmatch translation carries no recording of its own but still needs
+ * attribution. See MusixmatchAttribution.
+ */
+export interface SideAttribution {
+  copyright: string;
+  trackingUrl: string;
+}
+
 export interface Song {
   id: string;
   title: string;
@@ -35,17 +54,10 @@ export interface Song {
   languageB: string;
   alignment: AlignedLine[];
   exportOptions: ExportOptions;
-  /** Set by AI mode when the translation is a known/official version vs. machine-translated. */
-  isOfficialTranslation?: boolean;
-  /**
-   * Present when the lyrics came from Musixmatch, whose terms require the copyright notice to be
-   * visible and a view to be counted wherever they are shown. See MusixmatchAttribution.
-   */
-  lyricsAttribution?: {
-    provider: "musixmatch";
-    copyright: string;
-    trackingUrls: string[];
-  };
+  sourceA?: SideSource;
+  sourceB?: SideSource;
+  attributionA?: SideAttribution;
+  attributionB?: SideAttribution;
   createdAt: number;
   updatedAt: number;
 }

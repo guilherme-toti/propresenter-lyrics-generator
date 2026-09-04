@@ -12,6 +12,17 @@ export const exportOptionsSchema = z.object({
   linesPerSlide: z.number().int().min(1).max(8),
 });
 
+export const sideSourceSchema = z.object({
+  commontrackId: z.number(),
+  title: z.string(),
+  artist: z.string(),
+});
+
+export const sideAttributionSchema = z.object({
+  copyright: z.string(),
+  trackingUrl: z.string(),
+});
+
 export const songSchema = z.object({
   id: z.string(),
   title: z.string(),
@@ -21,14 +32,10 @@ export const songSchema = z.object({
   languageB: z.string(),
   alignment: z.array(alignedLineSchema).min(1, "Alinhe pelo menos uma linha antes de exportar."),
   exportOptions: exportOptionsSchema,
-  isOfficialTranslation: z.boolean().optional(),
-  lyricsAttribution: z
-    .object({
-      provider: z.literal("musixmatch"),
-      copyright: z.string(),
-      trackingUrls: z.array(z.string()),
-    })
-    .optional(),
+  sourceA: sideSourceSchema.optional(),
+  sourceB: sideSourceSchema.optional(),
+  attributionA: sideAttributionSchema.optional(),
+  attributionB: sideAttributionSchema.optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

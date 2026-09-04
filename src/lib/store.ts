@@ -1,6 +1,5 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { z } from "zod";
 import {
   alignmentToRaw,
   buildAlignmentFromManual,
@@ -11,30 +10,28 @@ import {
   updateRowText,
   updateSectionLabel,
 } from "@/lib/alignment";
-import { createEmptySong, type AlignedLine, type Song } from "@/lib/types";
+import { createEmptySong, type AlignedLine, type Song, type SideAttribution, type SideSource } from "@/lib/types";
 import { storedSongSchema } from "@/lib/songSchema";
 
 interface LibraryState {
-  songs: Song[];
-  activeSongId: string | null;
+  song: Song | null;
 
-  createSong: (overrides?: Partial<Song>) => string;
-  deleteSong: (id: string) => void;
-  renameSong: (id: string, title: string) => void;
-  selectSong: (id: string) => void;
-  replaceSong: (song: Song) => void;
-  updateSong: (id: string, patch: Partial<Song>) => void;
+  startSong: (overrides?: Partial<Song>) => void;
+  updateSong: (patch: Partial<Song>) => void;
 
-  setLanguageRaw: (id: string, side: "languageA" | "languageB", raw: string) => void;
-  realignFromManualText: (id: string) => void;
-  applyAiRealignment: (id: string, result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] }) => void;
+  setLanguageRaw: (side: "languageA" | "languageB", raw: string) => void;
+  /** Swaps one side's raw lyrics for a different catalogue recording's — alignment is left as-is
+   * for the user to redo (see LyricsEditors' "Alinhar letra"/"Realinhar com IA"). */
+  replaceSide: (side: "languageA" | "languageB", raw: string, source: SideSource, attribution: SideAttribution) => void;
+  realignFromManualText: () => void;
+  applyAiRealignment: (result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] }) => void;
 
-  editRow: (id: string, rowId: string, side: "a" | "b", value: string) => void;
-  editSectionLabel: (id: string, rowId: string, label: string) => void;
-  addRowAfter: (id: string, rowId: string) => void;
-  removeRow: (id: string, rowId: string) => void;
-  moveRowInSong: (id: string, rowId: string, direction: "up" | "down") => void;
-  toggleRowSectionBreak: (id: string, rowId: string) => void;
+  editRow: (rowId: string, side: "a" | "b", value: string) => void;
+  editSectionLabel: (rowId: string, label: string) => void;
+  addRowAfter: (rowId: string) => void;
+  removeRow: (rowId: string) => void;
+  moveRowInSong: (rowId: string, direction: "up" | "down") => void;
+  toggleRowSectionBreak: (rowId: string) => void;
 }
 
 function touch(song: Song): Song {
@@ -56,129 +53,105 @@ function withSyncedRaw(alignment: AlignedLine[]): Pick<Song, "alignment" | "lang
 
 export const useLibraryStore = create<LibraryState>()(
   persist(
-    (set, get) => ({
-      songs: [],
-      activeSongId: null,
+    (set) => ({
+      song: null,
 
-      createSong: (overrides) => {
-        const song = createEmptySong(overrides);
-        set((state) => ({ songs: [song, ...state.songs], activeSongId: song.id }));
-        return song.id;
+      startSong: (overrides) => set({ song: createEmptySong(overrides) }),
+
+      updateSong: (patch) => {
+        set((state) => (state.song ? { song: touch({ ...state.song, ...patch }) } : state));
       },
 
-      deleteSong: (id) => {
+      setLanguageRaw: (side, raw) => {
+        set((state) => (state.song ? { song: touch({ ...state.song, [side]: raw }) } : state));
+      },
+
+      replaceSide: (side, raw, source, attribution) => {
         set((state) => {
-          const songs = state.songs.filter((s) => s.id !== id);
-          const activeSongId = state.activeSongId === id ? (songs[0]?.id ?? null) : state.activeSongId;
-          return { songs, activeSongId };
+          if (!state.song) return state;
+          const sourceKey = side === "languageA" ? "sourceA" : "sourceB";
+          const attributionKey = side === "languageA" ? "attributionA" : "attributionB";
+          return { song: touch({ ...state.song, [side]: raw, [sourceKey]: source, [attributionKey]: attribution }) };
         });
       },
 
-      renameSong: (id, title) => {
-        get().updateSong(id, { title });
+      realignFromManualText: () => {
+        set((state) =>
+          state.song
+            ? { song: touch({ ...state.song, alignment: buildAlignmentFromManual(state.song.languageA, state.song.languageB) }) }
+            : state,
+        );
       },
 
-      selectSong: (id) => set({ activeSongId: id }),
-
-      replaceSong: (song) => {
-        set((state) => ({ songs: state.songs.map((s) => (s.id === song.id ? touch(song) : s)) }));
+      applyAiRealignment: (result) => {
+        set((state) =>
+          state.song
+            ? {
+                song: touch({
+                  ...state.song,
+                  languageA: result.languageARaw,
+                  languageB: result.languageBRaw,
+                  alignment: result.alignment,
+                }),
+              }
+            : state,
+        );
       },
 
-      updateSong: (id, patch) => {
-        set((state) => ({
-          songs: state.songs.map((s) => (s.id === id ? touch({ ...s, ...patch }) : s)),
-        }));
+      editRow: (rowId, side, value) => {
+        set((state) =>
+          state.song
+            ? { song: touch({ ...state.song, ...withSyncedRaw(updateRowText(state.song.alignment, rowId, side, value)) }) }
+            : state,
+        );
       },
 
-      setLanguageRaw: (id, side, raw) => {
-        set((state) => ({
-          songs: state.songs.map((s) => (s.id === id ? touch({ ...s, [side]: raw }) : s)),
-        }));
+      editSectionLabel: (rowId, label) => {
+        set((state) =>
+          state.song ? { song: touch({ ...state.song, alignment: updateSectionLabel(state.song.alignment, rowId, label) }) } : state,
+        );
       },
 
-      realignFromManualText: (id) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: buildAlignmentFromManual(s.languageA, s.languageB) }) : s,
-          ),
-        }));
+      addRowAfter: (rowId) => {
+        set((state) =>
+          state.song ? { song: touch({ ...state.song, ...withSyncedRaw(insertRowAfter(state.song.alignment, rowId)) }) } : state,
+        );
       },
 
-      applyAiRealignment: (id, result) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id
-              ? touch({ ...s, languageA: result.languageARaw, languageB: result.languageBRaw, alignment: result.alignment })
-              : s,
-          ),
-        }));
+      removeRow: (rowId) => {
+        set((state) =>
+          state.song ? { song: touch({ ...state.song, ...withSyncedRaw(deleteRow(state.song.alignment, rowId)) }) } : state,
+        );
       },
 
-      editRow: (id, rowId, side, value) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, ...withSyncedRaw(updateRowText(s.alignment, rowId, side, value)) }) : s,
-          ),
-        }));
+      moveRowInSong: (rowId, direction) => {
+        set((state) =>
+          state.song
+            ? { song: touch({ ...state.song, ...withSyncedRaw(moveRow(state.song.alignment, rowId, direction)) }) }
+            : state,
+        );
       },
 
-      editSectionLabel: (id, rowId, label) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, alignment: updateSectionLabel(s.alignment, rowId, label) }) : s,
-          ),
-        }));
-      },
-
-      addRowAfter: (id, rowId) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, ...withSyncedRaw(insertRowAfter(s.alignment, rowId)) }) : s,
-          ),
-        }));
-      },
-
-      removeRow: (id, rowId) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, ...withSyncedRaw(deleteRow(s.alignment, rowId)) }) : s,
-          ),
-        }));
-      },
-
-      moveRowInSong: (id, rowId, direction) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, ...withSyncedRaw(moveRow(s.alignment, rowId, direction)) }) : s,
-          ),
-        }));
-      },
-
-      toggleRowSectionBreak: (id, rowId) => {
-        set((state) => ({
-          songs: state.songs.map((s) =>
-            s.id === id ? touch({ ...s, ...withSyncedRaw(toggleSectionBreak(s.alignment, rowId)) }) : s,
-          ),
-        }));
+      toggleRowSectionBreak: (rowId) => {
+        set((state) =>
+          state.song
+            ? { song: touch({ ...state.song, ...withSyncedRaw(toggleSectionBreak(state.song.alignment, rowId)) }) }
+            : state,
+        );
       },
     }),
     {
       name: "lyrics-studio-library",
-      version: 0,
-      // No real shape migrations exist yet — this only exists so zustand doesn't
-      // discard old localStorage data (and warn about it) whenever the persisted
-      // blob predates this option being set explicitly. Songs are re-validated
-      // rather than trusted as-is: a stale/malformed entry gets dropped instead
-      // of crashing the app on render.
-      migrate: (persistedState) => {
-        const candidate = persistedState as { songs?: unknown; activeSongId?: unknown } | undefined;
-        const parsed = z.array(storedSongSchema).safeParse(candidate?.songs);
-        const songs = (parsed.success ? parsed.data : []) as Song[];
-        const activeSongId =
-          typeof candidate?.activeSongId === "string" && songs.some((s) => s.id === candidate.activeSongId)
-            ? candidate.activeSongId
-            : (songs[0]?.id ?? null);
-        return { songs, activeSongId };
+      version: 1,
+      // Bumped from the old {songs: Song[], activeSongId} shape — the app now only ever holds one
+      // active song, so there's nothing sensible to carry forward from a saved list. Anything
+      // persisted under the old version is discarded; the song is re-validated rather than trusted
+      // as-is, so a stale/malformed entry falls back to null instead of crashing the app on render.
+      migrate: (persistedState, version) => {
+        if (version < 1) return { song: null };
+        const candidate = persistedState as { song?: unknown } | undefined;
+        const parsed = storedSongSchema.safeParse(candidate?.song);
+        return { song: parsed.success ? (parsed.data as Song) : null };
       },
     },
   ),

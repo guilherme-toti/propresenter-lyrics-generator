@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { combineSearchResults, type TrackCandidate } from "./musixmatch.ts";
+import { combineSearchResults, mapMusixmatchLanguage, pairLineAligned, type TrackCandidate } from "./musixmatch.ts";
 
 function track(id: number, title: string, trackRating: number): TrackCandidate {
   return { commontrackId: id, title, artist: "Artist", language: "pt", trackRating };
@@ -43,4 +43,53 @@ test("interleaves title and lyrics results after promotion, deduping by id", () 
 
 test("handles empty inputs", () => {
   assert.deepEqual(combineSearchResults([], []), []);
+});
+
+test("mapMusixmatchLanguage maps bare and regional codes to a church language", () => {
+  assert.equal(mapMusixmatchLanguage("en"), "English");
+  assert.equal(mapMusixmatchLanguage("en-US"), "English");
+  assert.equal(mapMusixmatchLanguage("pt"), "Português (Brasil)");
+  assert.equal(mapMusixmatchLanguage("pt-br"), "Português (Brasil)");
+  assert.equal(mapMusixmatchLanguage("pt-PT"), "Português (Brasil)");
+});
+
+test("mapMusixmatchLanguage returns null for unknown or empty tags", () => {
+  assert.equal(mapMusixmatchLanguage(""), null);
+  assert.equal(mapMusixmatchLanguage("es"), null);
+  assert.equal(mapMusixmatchLanguage("fr-FR"), null);
+});
+
+test("pairLineAligned zips matching sections and lines by position", () => {
+  const original = "Line one\nLine two\n\nChorus line";
+  const translated = "Linha um\nLinha dois\n\nLinha do refrão";
+
+  const result = pairLineAligned(original, translated);
+
+  assert.deepEqual(result, [
+    { label: "Parte 1", lines: [
+      { original: "Line one", translation: "Linha um" },
+      { original: "Line two", translation: "Linha dois" },
+    ] },
+    { label: "Parte 2", lines: [
+      { original: "Chorus line", translation: "Linha do refrão" },
+    ] },
+  ]);
+});
+
+test("pairLineAligned returns null when section counts differ", () => {
+  const original = "Line one\n\nLine two";
+  const translated = "Linha um";
+
+  assert.equal(pairLineAligned(original, translated), null);
+});
+
+test("pairLineAligned returns null when a section's line count differs", () => {
+  const original = "Line one\nLine two";
+  const translated = "Linha um";
+
+  assert.equal(pairLineAligned(original, translated), null);
+});
+
+test("pairLineAligned returns null for empty input", () => {
+  assert.equal(pairLineAligned("", ""), null);
 });

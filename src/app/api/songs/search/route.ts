@@ -18,15 +18,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Requisição inválida." }, { status: 400 });
   }
 
-  // Without a key there is no catalogue to pick from; the caller falls back to generating
-  // straight from the query, exactly as it did before the picker existed.
+  // Without a key there is no catalogue to pick from; the caller just shows an empty
+  // results list, and "Criar manualmente" is the only option left.
   if (!isMusixmatchConfigured()) {
-    return NextResponse.json({ configured: false, results: [] });
+    return NextResponse.json({ results: [] });
   }
 
   try {
     const results = await searchTracks(parsed.data.query);
-    return NextResponse.json({ configured: true, results });
+    return NextResponse.json({ results });
   } catch (error) {
     console.error("catalogue search failed", error);
     return NextResponse.json({ error: "Não foi possível buscar no catálogo." }, { status: 502 });

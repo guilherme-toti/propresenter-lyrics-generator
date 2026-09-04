@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import { Header } from "@/components/layout/Header";
-import { LibrarySidebar } from "@/components/library/LibrarySidebar";
 import { StudioShell } from "@/components/studio/StudioShell";
 import { NewSongDialog } from "@/components/studio/NewSongDialog";
 import { GeneratingOverlay } from "@/components/studio/GeneratingOverlay";
@@ -16,7 +15,6 @@ import { useDesktopStore } from "@/lib/desktopStore";
 import { useGenerationStore } from "@/lib/generationStore";
 import { useLibraryStore } from "@/lib/store";
 import { usePlaylistWatcher } from "@/lib/desktop/usePlaylistWatcher";
-import { useQuickAddListener } from "@/lib/desktop/useQuickAddListener";
 import { useValidateActivePlaylist } from "@/lib/desktop/useValidateActivePlaylist";
 
 export function AppShell() {
@@ -24,7 +22,6 @@ export function AppShell() {
   // real UI before then would make the first client render diverge from the server-rendered HTML.
   const mounted = useHasMounted();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
   const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
@@ -33,23 +30,21 @@ export function AppShell() {
   const generationQuery = useGenerationStore((s) => s.query);
   const generationError = useGenerationStore((s) => s.error);
   const dismissGeneration = useGenerationStore((s) => s.finish);
-  const createSong = useLibraryStore((s) => s.createSong);
+  const startSong = useLibraryStore((s) => s.startSong);
 
   // Escape hatch from a failed generation: start the blank song the user would otherwise
   // have to go back and ask for through "Nova música" → "Criar manualmente".
   const createManuallyFromFailure = () => {
-    createSong({ mode: "manual" });
+    startSong({ mode: "manual" });
     dismissGeneration();
   };
-  useQuickAddListener();
 
   const openNewSongDialog = () => setDialogOpen(true);
-  const toggleSidebar = () => setSidebarOpen((current) => !current);
 
   if (!mounted) {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
-        <Header sidebarOpen={sidebarOpen} onToggleSidebar={toggleSidebar} onNewSong={openNewSongDialog} />
+        <Header onNewSong={openNewSongDialog} />
         <div className="flex flex-1" />
       </div>
     );
@@ -60,15 +55,12 @@ export function AppShell() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <Header
-        sidebarOpen={sidebarOpen}
-        onToggleSidebar={toggleSidebar}
         onNewSong={openNewSongDialog}
         showTitle={!desktop}
         showSettings={desktop}
         onOpenSettings={() => setSettingsOpen(true)}
       />
       <div className="flex flex-1 overflow-hidden">
-        <LibrarySidebar open={sidebarOpen} onNewSong={openNewSongDialog} />
         <main className="flex-1 overflow-y-auto">
           {generationQuery ? (
             <GeneratingOverlay

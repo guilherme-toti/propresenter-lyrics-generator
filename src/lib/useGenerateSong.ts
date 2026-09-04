@@ -8,24 +8,22 @@ const MIN_QUERY_LENGTH = 2;
 
 /**
  * Shared "Generate with AI" flow: calls /api/generate-song and saves the
- * result as a new song. Used by both the in-app "Nova música" dialog and the
- * standalone quick-add popup window (desktop app, global hotkey) — both hand
- * the query off to the full-screen loading/error overlay (useGenerationStore)
- * rather than showing their own inline loading state, so the result is
- * returned directly instead of exposed as hook state (which the quick-add
- * popup can't rely on anyway — it closes right after calling this).
+ * result as a new song. Hands the picked track off to the full-screen
+ * loading/error overlay (useGenerationStore) rather than showing its own
+ * inline loading state, so the result is returned directly instead of
+ * exposed as hook state.
  */
 export function useGenerateSong() {
-  const createSong = useLibraryStore((s) => s.createSong);
+  const startSong = useLibraryStore((s) => s.startSong);
 
   /**
    * Catalogue matches for the picker. An empty list means either nothing matched or no catalogue
-   * is configured — `configured` tells them apart, so the dialog can offer to generate anyway
-   * instead of claiming the song doesn't exist.
+   * is configured — either way, the dialog just shows the empty-results message, and "Criar
+   * manualmente" is the only option left.
    */
   const search = async (
     query: string,
-  ): Promise<{ results: TrackCandidate[]; configured: boolean } | { error: string }> => {
+  ): Promise<{ results: TrackCandidate[] } | { error: string }> => {
     const trimmed = query.trim();
     if (trimmed.length < MIN_QUERY_LENGTH) {
       return { error: "Digite o título de uma música ou um trecho da letra." };
@@ -38,29 +36,25 @@ export function useGenerateSong() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Algo deu errado.");
-      return { results: data.results ?? [], configured: Boolean(data.configured) };
+      return { results: data.results ?? [] };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Algo deu errado." };
     }
   };
 
-  const generate = async (query: string, picked?: TrackCandidate): Promise<{ id: string } | { error: string }> => {
-    const trimmed = query.trim();
-    if (trimmed.length < MIN_QUERY_LENGTH) {
-      return { error: "Digite o título de uma música, um trecho da letra ou uma breve descrição." };
-    }
+  const generate = async (picked: TrackCandidate): Promise<{ ok: true } | { error: string }> => {
     try {
       const res = await fetch("/api/generate-song", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed, picked }),
+        body: JSON.stringify({ picked }),
       });
       const data = await res.json();
       if (!res.ok) {
         throw new Error(data.error ?? "Algo deu errado.");
       }
-      const id = createSong(data.song as Song);
-      return { id };
+      startSong(data.song as Song);
+      return { ok: true };
     } catch (err) {
       return { error: err instanceof Error ? err.message : "Algo deu errado." };
     }

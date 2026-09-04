@@ -3,6 +3,7 @@
 import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { SongMetadataCard } from "@/components/studio/SongMetadataCard";
+import { LanguageSourceCard } from "@/components/studio/LanguageSourceCard";
 import { LyricsEditors } from "@/components/studio/LyricsEditors";
 import { AlignmentPreview } from "@/components/studio/AlignmentPreview";
 import { ExportFab } from "@/components/studio/ExportFab";
@@ -29,9 +30,7 @@ function EmptyState({ onNewSong }: { onNewSong: () => void }) {
 }
 
 export function StudioShell({ onNewSong }: { onNewSong: () => void }) {
-  const songs = useLibraryStore((s) => s.songs);
-  const activeSongId = useLibraryStore((s) => s.activeSongId);
-  const song = songs.find((s) => s.id === activeSongId);
+  const song = useLibraryStore((s) => s.song);
 
   if (!song) {
     return <EmptyState onNewSong={onNewSong} />;
@@ -40,6 +39,10 @@ export function StudioShell({ onNewSong }: { onNewSong: () => void }) {
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-8 pb-28">
       <SongMetadataCard song={song} />
+      <div className="grid gap-3 sm:grid-cols-2">
+        <LanguageSourceCard song={song} side="languageA" label="Português" />
+        <LanguageSourceCard song={song} side="languageB" label="Inglês" />
+      </div>
       <LyricsEditors song={song} />
       <AlignmentPreview song={song} />
       <MusixmatchAttribution song={song} />

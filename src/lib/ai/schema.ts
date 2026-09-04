@@ -20,7 +20,6 @@ export const aiSongSchema = z
     artist: z.string().default(""),
     originalLanguage: churchLanguageSchema,
     translationLanguage: churchLanguageSchema,
-    isOfficialTranslation: z.boolean().default(false),
     sections: z.array(sectionSchema).min(1),
   })
   .refine((data) => data.originalLanguage !== data.translationLanguage, {
@@ -37,39 +36,37 @@ export const aiRealignSchema = z.object({
 export type AiRealignResponse = z.infer<typeof aiRealignSchema>;
 
 /**
- * Step 1 of the generation pipeline: identify the song, and separately decide whether a real,
- * officially recorded version exists in the *other* language — which is a very different question
- * from "can you translate this", and the reason it gets its own call. See generateSongWithAi().
+ * Used when the catalogue gave no usable language tag for the picked recording: a minimal call
+ * that only identifies which of the two supported languages the lyrics are in — no translation is
+ * attempted by the model. See identifyLanguageOnly() in openrouter.ts.
  */
-export const aiIdentifySchema = z.object({
-  /**
-   * Whether the model actually recognises a specific real song here. Defaults to true so a model
-   * that just omits the field doesn't break the happy path — assertLooksLikeLyrics() is the real
-   * backstop for a model that claims to know a song and then can't produce it.
-   */
-  found: z.boolean().default(true),
-  title: z.string().min(1),
-  artist: z.string().default(""),
+export const aiLanguageSchema = z.object({
   originalLanguage: churchLanguageSchema,
-  officialVersion: z.object({
-    exists: z.boolean(),
-    title: z.string().default(""),
-    artist: z.string().default(""),
-  }),
 });
 
-export type AiIdentifyResponse = z.infer<typeof aiIdentifySchema>;
+export type AiLanguageResponse = z.infer<typeof aiLanguageSchema>;
 
-/** Step 2: one recorded version's lyrics, in one language, with no translation attached. */
-export const aiLyricsSchema = z.object({
-  sections: z
-    .array(
-      z.object({
-        label: z.string().min(1),
-        lines: z.array(z.string()).min(1),
-      }),
-    )
-    .min(1),
+/**
+ * The over-the-wire shape actually requested from the model for translate/realign calls: a
+ * [original, translation] tuple per line instead of a {original, translation} object. Repeating
+ * those two key names on every single lyric line was a meaningful share of completion tokens (and
+ * therefore latency) on a full song. expandWireSections() converts this back into the
+ * {original, translation} shape the rest of the app expects, right after parsing.
+ */
+const wireSectionSchema = z.object({
+  label: z.string().min(1),
+  lines: z.array(z.tuple([z.string(), z.string()])).min(1),
 });
 
-export type AiLyricsResponse = z.infer<typeof aiLyricsSchema>;
+export const aiRealignWireSchema = z.object({
+  sections: z.array(wireSectionSchema).min(1),
+});
+
+export function expandWireSections(
+  sections: z.infer<typeof wireSectionSchema>[],
+): { label: string; lines: { original: string; translation: string }[] }[] {
+  return sections.map((section) => ({
+    label: section.label,
+    lines: section.lines.map(([original, translation]) => ({ original, translation })),
+  }));
+}

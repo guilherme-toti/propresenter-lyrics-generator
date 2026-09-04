@@ -1,7 +1,7 @@
 import { buildAlignmentFromAiSections } from "@/lib/alignment";
 import { createEmptySong, type Song } from "@/lib/types";
 import type { AiSongResponse } from "./schema";
-import type { SongAttribution } from "./openrouter";
+import type { GeneratedSong } from "./openrouter";
 
 type SectionLines = { lines: { original: string; translation: string }[] };
 
@@ -25,18 +25,28 @@ function portugueseFirst(response: AiSongResponse): AiSongResponse["sections"] {
 }
 
 /** Converts a validated AI response into a ready-to-edit Song draft. */
-export function aiResponseToSong(response: AiSongResponse, attribution?: SongAttribution | null): Song {
+export function aiResponseToSong(
+  response: AiSongResponse,
+  generated: Pick<GeneratedSong, "originalSource" | "translationAttribution">,
+): Song {
   const sections = portugueseFirst(response);
   const alignment = buildAlignmentFromAiSections(sections);
+
+  // The picked recording backs whichever side matches originalLanguage; the other side (if it has
+  // content) is a literal Musixmatch translation with attribution but no recording of its own —
+  // same swap portugueseFirst() applies to the lines themselves.
+  const originalIsA = response.originalLanguage === "Português (Brasil)";
 
   return createEmptySong({
     title: response.title,
     artist: response.artist,
     mode: "ai",
-    isOfficialTranslation: response.isOfficialTranslation,
-    ...(attribution ? { lyricsAttribution: attribution } : {}),
     languageA: reconstructRaw(sections, "original"),
     languageB: reconstructRaw(sections, "translation"),
     alignment,
+    sourceA: originalIsA ? generated.originalSource : undefined,
+    sourceB: originalIsA ? undefined : generated.originalSource,
+    attributionA: originalIsA ? generated.originalSource.attribution : (generated.translationAttribution ?? undefined),
+    attributionB: originalIsA ? (generated.translationAttribution ?? undefined) : generated.originalSource.attribution,
   });
 }

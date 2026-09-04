@@ -15,6 +15,7 @@ const eslintConfig = defineConfig([
     // Rust build output + the standalone Next.js server it bundles as a
     // sidecar (see scripts/tauri/prebuild.mjs) — not source we own.
     "src-tauri/target/**",
+    "src-tauri/resources/**",
   ]),
 ]);
 
