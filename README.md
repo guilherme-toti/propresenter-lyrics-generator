@@ -90,14 +90,14 @@ Update signing needs a one-time setup (already done for this repo — see the pe
 
 **Linux note:** the updater plugin only supports auto-update through the AppImage build — `.deb`/`.rpm` installs are managed by the system's own package manager instead and won't self-update. Not a concern for Windows/macOS, which is what this app actually targets.
 
-### Configuring `OPENROUTER_API_KEY` for the installed app
+### Configuring `OPENROUTER_API_KEY` and `MUSIXMATCH_API_KEY` for the installed app
 
-The packaged app doesn't read `.env.local` (that's a `next dev`/web-only convention). Instead, open **Ajustes → Chave da OpenRouter** and paste the key there — the app writes it to a `.env` file in its own config directory and applies it immediately, no restart needed:
+The packaged app doesn't read `.env.local` (that's a `next dev`/web-only convention). Instead, open **Ajustes** and paste each key into its own field ("Chave da OpenRouter", "Chave da Musixmatch") — the app writes it to a `.env` file in its own config directory and applies it immediately, no restart needed:
 
 - **Windows**: `%APPDATA%\com.pma.lyricsstudio\.env`
 - **macOS**: `~/Library/Application Support/com.pma.lyricsstudio/.env`
 
-Once saved, Ajustes only ever shows the key masked (e.g. `sk-or••••ab12`) — pasting a new value is the only way to change it. Without a key configured, the app runs fine and the manual (non-AI) flow works exactly as in the browser.
+Once saved, Ajustes only ever shows each key masked (e.g. `sk-or••••ab12`) — pasting a new value is the only way to change it. Without `OPENROUTER_API_KEY` configured, the app runs fine and the manual (non-AI) flow works exactly as in the browser. Without `MUSIXMATCH_API_KEY`, catalogue search/lyrics lookup is unavailable.
 
 ### Exporting straight into ProPresenter, and auto-detecting the current playlist
 

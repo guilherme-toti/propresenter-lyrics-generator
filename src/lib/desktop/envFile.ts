@@ -3,7 +3,6 @@ import path from "node:path";
 import { getAppConfigDir } from "./appConfigDir";
 
 const ENV_FILENAME = ".env";
-const API_KEY_NAME = "OPENROUTER_API_KEY";
 
 /** Only ever set by the Tauri sidecar/dev process (see src-tauri/src/lib.rs and the
  * `tauri:dev:next` script) — a plain web deploy never sets this, so routes gated on
@@ -46,17 +45,17 @@ function maskApiKey(key: string): string {
   return `${key.slice(0, 5)}••••${key.slice(-4)}`;
 }
 
-export async function getMaskedApiKey(): Promise<string | null> {
-  const key = (await readEnvFile()).get(API_KEY_NAME);
+export async function getMaskedApiKey(keyName: string): Promise<string | null> {
+  const key = (await readEnvFile()).get(keyName);
   return key ? maskApiKey(key) : null;
 }
 
 /** Persists the key to disk and applies it to the running server process
  * immediately, so it takes effect without an app restart. */
-export async function saveApiKey(apiKey: string): Promise<string> {
+export async function saveApiKey(keyName: string, apiKey: string): Promise<string> {
   const entries = await readEnvFile();
-  entries.set(API_KEY_NAME, apiKey);
+  entries.set(keyName, apiKey);
   await writeEnvFile(entries);
-  process.env[API_KEY_NAME] = apiKey;
+  process.env[keyName] = apiKey;
   return maskApiKey(apiKey);
 }

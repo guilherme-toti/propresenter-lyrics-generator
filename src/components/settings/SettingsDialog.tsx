@@ -42,11 +42,23 @@ function FolderRow({
 
 /**
  * The key is never sent to this component in full after the initial paste —
- * the API only ever returns a masked form (see /api/settings/api-key and
- * src/lib/desktop/envFile.ts), so there's nothing here to leak beyond what's
- * already shown on screen.
+ * the API only ever returns a masked form (see the /api/settings/*-api-key
+ * routes and src/lib/desktop/envFile.ts), so there's nothing here to leak
+ * beyond what's already shown on screen.
  */
-function ApiKeyRow({ isOpen }: { isOpen: boolean }) {
+function ApiKeyRow({
+  isOpen,
+  endpoint,
+  title,
+  description,
+  placeholder,
+}: {
+  isOpen: boolean;
+  endpoint: string;
+  title: string;
+  description: string;
+  placeholder: string;
+}) {
   const [masked, setMasked] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [editing, setEditing] = useState(false);
@@ -57,7 +69,7 @@ function ApiKeyRow({ isOpen }: { isOpen: boolean }) {
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    fetch("/api/settings/api-key")
+    fetch(endpoint)
       .then((res) => (res.ok ? res.json() : { masked: null }))
       .then((data) => {
         if (cancelled) return;
@@ -72,7 +84,7 @@ function ApiKeyRow({ isOpen }: { isOpen: boolean }) {
     return () => {
       cancelled = true;
     };
-  }, [isOpen]);
+  }, [isOpen, endpoint]);
 
   const startEditing = () => {
     setValue("");
@@ -94,7 +106,7 @@ function ApiKeyRow({ isOpen }: { isOpen: boolean }) {
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch("/api/settings/api-key", {
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ apiKey: value.trim() }),
@@ -113,17 +125,14 @@ function ApiKeyRow({ isOpen }: { isOpen: boolean }) {
 
   return (
     <section>
-      <h3 className="mb-1 text-sm font-semibold text-ink">Chave da OpenRouter</h3>
-      <p className="mb-2 text-xs text-ink/60">
-        Usada pelo &quot;Gerar com IA&quot;. Fica salva só neste computador — nunca é exibida por completo depois de
-        salva.
-      </p>
+      <h3 className="mb-1 text-sm font-semibold text-ink">{title}</h3>
+      <p className="mb-2 text-xs text-ink/60">{description}</p>
       {editing ? (
         <div className="flex flex-col gap-2">
           <Input
             type="password"
             autoFocus
-            placeholder="sk-..."
+            placeholder={placeholder}
             value={value}
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && save()}
@@ -175,7 +184,23 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
     <>
       <Modal open={isOpen} onClose={onClose} title="Ajustes">
         <div className="flex flex-col gap-5">
-          <ApiKeyRow isOpen={isOpen} />
+          <ApiKeyRow
+            isOpen={isOpen}
+            endpoint="/api/settings/api-key"
+            title="Chave da OpenRouter"
+            description={
+              'Usada pelo "Gerar com IA". Fica salva só neste computador — nunca é exibida por completo depois de salva.'
+            }
+            placeholder="sk-..."
+          />
+
+          <ApiKeyRow
+            isOpen={isOpen}
+            endpoint="/api/settings/musixmatch-api-key"
+            title="Chave da Musixmatch"
+            description="Usada pra buscar a letra oficial no catálogo. Fica salva só neste computador — nunca é exibida por completo depois de salva."
+            placeholder="Cole a chave da Musixmatch"
+          />
 
           <FolderRow
             label="Pasta da Library"
