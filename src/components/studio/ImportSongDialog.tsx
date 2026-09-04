@@ -26,18 +26,21 @@ export function ImportSongDialog({ open, onClose }: ImportSongDialogProps) {
 
   useEffect(() => {
     if (!open || !libraryFolder) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
-    setError(null);
-    setQuery("");
-    void list(libraryFolder).then((result) => {
+    const folder = libraryFolder;
+
+    async function run() {
+      setLoading(true);
+      setError(null);
+      setQuery("");
+      const result = await list(folder);
       setLoading(false);
       if ("error" in result) {
         setError(result.error);
         return;
       }
       setFiles(result.files);
-    });
+    }
+    void run();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, libraryFolder]);
 
