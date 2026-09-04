@@ -1,8 +1,8 @@
-import { buildAlignmentFromManual } from "@/lib/alignment";
+import { alignmentToRaw, buildAlignmentFromManual } from "@/lib/alignment";
 import type { AlignedLine } from "@/lib/types";
 import { classifyLineLanguages } from "@/lib/ai/openrouter";
 import { decodeProFile } from "./decode";
-import { buildRawTextFromTags, classifyCueLines } from "./languageDetect";
+import { buildBilingualAlignment, buildRawTextFromTags, classifyCueLines } from "./languageDetect";
 
 export interface ImportedSong {
   title: string;
@@ -44,8 +44,18 @@ export async function importSongFromProFile(buffer: Buffer): Promise<ImportedSon
     }
   }
 
-  const { languageA, languageB } = buildRawTextFromTags(cueLines, resolvedTags, isBilingual, dominantLanguage);
-  const alignment = buildAlignmentFromManual(languageA, languageB);
+  let alignment: AlignedLine[];
+  let languageA: string;
+  let languageB: string;
+
+  if (isBilingual) {
+    alignment = buildBilingualAlignment(cueLines, resolvedTags);
+    languageA = alignmentToRaw(alignment, "a");
+    languageB = alignmentToRaw(alignment, "b");
+  } else {
+    ({ languageA, languageB } = buildRawTextFromTags(cueLines, dominantLanguage));
+    alignment = buildAlignmentFromManual(languageA, languageB);
+  }
 
   return { title, languageA, languageB, alignment };
 }

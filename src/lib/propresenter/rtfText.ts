@@ -51,7 +51,7 @@ export function rtfToPlainText(rtf: string): string {
     const ch = rtf[i];
 
     if (ch === "{") {
-      let j = i + 1;
+      const j = i + 1;
       let ignorable = isSkipping(); // inherit: a group inside a skipped group is also skipped
       if (!ignorable) {
         let k = j;

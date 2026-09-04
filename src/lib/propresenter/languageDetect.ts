@@ -1,3 +1,6 @@
+import type { AlignedLine } from "@/lib/types";
+import { labelSections } from "@/lib/alignment";
+
 export type LineLanguage = "pt" | "en" | "ambiguous";
 
 const PT_DIACRITICS = /[ãõáàâéêíóôúçÃÕÁÀÂÉÊÍÓÔÚÇ]/;
@@ -84,37 +87,56 @@ export function classifyCueLines(cueLines: string[][]): CueClassification {
 }
 
 /**
- * Builds languageA (Portuguese)/languageB (English) raw text — one block per
- * cue, blank-line separated, matching the format buildAlignmentFromManual()
- * (src/lib/alignment.ts) already expects for manually-pasted lyrics. `tags`
- * must be fully resolved ("pt"/"en" only, no "ambiguous") — resolve those via
- * the AI fallback (Task 3) before calling this.
+ * Builds languageA (Portuguese)/languageB (English) raw text for the single-language case — one
+ * block per cue, blank-line separated, matching the format buildAlignmentFromManual()
+ * (src/lib/alignment.ts) already expects for manually-pasted lyrics. Only used when
+ * classifyCueLines() says the song isn't bilingual — see buildBilingualAlignment() below for the
+ * bilingual case, which builds AlignedLine[] directly per cue instead of round-tripping through
+ * raw text (a cue with content on only one side would otherwise silently drop that side's block,
+ * desyncing every later cue's index-wise pairing).
  */
 export function buildRawTextFromTags(
   cueLines: string[][],
-  tags: ("pt" | "en")[][],
-  isBilingual: boolean,
   dominantLanguage: "pt" | "en",
 ): { languageA: string; languageB: string } {
-  const ptBlocks: string[] = [];
-  const enBlocks: string[] = [];
+  const blocks = cueLines.map((lines) => lines.join("\n"));
+  return dominantLanguage === "pt"
+    ? { languageA: blocks.join("\n\n"), languageB: "" }
+    : { languageA: "", languageB: blocks.join("\n\n") };
+}
 
-  cueLines.forEach((lines, cueIndex) => {
-    if (!isBilingual) {
-      const block = lines.join("\n");
-      (dominantLanguage === "pt" ? ptBlocks : enBlocks).push(block);
-      return;
+/**
+ * Builds an AlignedLine[] directly per cue for the bilingual case, pairing each cue's own PT/EN
+ * lines index-wise — never across cues. Unlike routing through buildRawTextFromTags() +
+ * buildAlignmentFromManual(), a cue with content on only one side (a PT-only title/artist slide,
+ * or every ambiguous line collapsing to dominantLanguage when the AI fallback fails) can't shift
+ * any subsequent cue's pairing out of sync, because each cue keeps its own row(s) regardless of
+ * whether the other side is empty for that cue.
+ */
+export function buildBilingualAlignment(cueLines: string[][], tags: ("pt" | "en")[][]): AlignedLine[] {
+  const cues = cueLines
+    .map((lines, cueIndex) => {
+      const cueTags = tags[cueIndex];
+      const ptLines = lines.filter((_, i) => cueTags[i] === "pt");
+      const enLines = lines.filter((_, i) => cueTags[i] === "en");
+      return { ptLines, enLines };
+    })
+    .filter((cue) => cue.ptLines.length > 0 || cue.enLines.length > 0);
+
+  const labels = labelSections(cues.map((cue) => (cue.ptLines.length > 0 ? cue.ptLines : cue.enLines)));
+
+  const result: AlignedLine[] = [];
+  cues.forEach((cue, cueIndex) => {
+    const rowCount = Math.max(cue.ptLines.length, cue.enLines.length);
+    for (let j = 0; j < rowCount; j++) {
+      result.push({
+        id: crypto.randomUUID(),
+        a: cue.ptLines[j] ?? "",
+        b: cue.enLines[j] ?? "",
+        sectionBreakBefore: j === 0,
+        sectionLabel: j === 0 ? (labels[cueIndex] ?? `Parte ${cueIndex + 1}`) : undefined,
+      });
     }
-
-    const cueTags = tags[cueIndex];
-    const ptLines = lines.filter((_, i) => cueTags[i] === "pt");
-    const enLines = lines.filter((_, i) => cueTags[i] === "en");
-    if (ptLines.length > 0) ptBlocks.push(ptLines.join("\n"));
-    if (enLines.length > 0) enBlocks.push(enLines.join("\n"));
   });
-
-  return {
-    languageA: ptBlocks.join("\n\n"),
-    languageB: enBlocks.join("\n\n"),
-  };
+  return result;
 }
