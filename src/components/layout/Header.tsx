@@ -32,8 +32,6 @@ export function Header({
       >
         <Home size={18} />
       </button>
-      {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
-      <div className="flex-1" />
       {onImport && (
         <button
           onClick={onImport}
@@ -43,6 +41,8 @@ export function Header({
           Importar
         </button>
       )}
+      {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
+      <div className="flex-1" />
       {showSettings && (
         <button
           onClick={onOpenSettings}
