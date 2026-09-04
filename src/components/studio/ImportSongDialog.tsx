@@ -13,6 +13,12 @@ interface ImportSongDialogProps {
   onClose: () => void;
 }
 
+/** Drops the trailing ".pro" for display — the filter and the actual import still use the full
+ * filename/path, this only affects what's shown in the list. */
+function displayName(filename: string): string {
+  return filename.replace(/\.pro$/i, "");
+}
+
 export function ImportSongDialog({ open, onClose }: ImportSongDialogProps) {
   const libraryFolder = useDesktopStore((s) => s.libraryFolder);
   const startSong = useLibraryStore((s) => s.startSong);
@@ -99,7 +105,7 @@ export function ImportSongDialog({ open, onClose }: ImportSongDialogProps) {
                       className="flex w-full items-baseline justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 text-left transition-colors hover:border-accent hover:bg-accent/5 disabled:opacity-50"
                     >
                       <span className="min-w-0">
-                        <span className="block truncate text-sm text-ink">{file.filename}</span>
+                        <span className="block truncate text-sm text-ink">{displayName(file.filename)}</span>
                         <span className="block truncate text-xs text-ink/55">{file.library}</span>
                       </span>
                       {importingPath === file.path && <Loader2 size={14} className="shrink-0 animate-spin" />}
