@@ -47,6 +47,16 @@ export const aiLanguageSchema = z.object({
 export type AiLanguageResponse = z.infer<typeof aiLanguageSchema>;
 
 /**
+ * classifyLineLanguages()'s response — used only for lines the pt/en
+ * heuristic in languageDetect.ts couldn't confidently tag on its own.
+ */
+export const aiLineLanguagesSchema = z.object({
+  tags: z.array(z.enum(["pt", "en"])),
+});
+
+export type AiLineLanguagesResponse = z.infer<typeof aiLineLanguagesSchema>;
+
+/**
  * The over-the-wire shape actually requested from the model for translate/realign calls: a
  * [original, translation] tuple per line instead of a {original, translation} object. Repeating
  * those two key names on every single lyric line was a meaningful share of completion tokens (and
