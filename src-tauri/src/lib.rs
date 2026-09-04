@@ -192,7 +192,18 @@ fn spawn_bundled_server(
     // `bundle.resources` ("resources/server/**/*") under the resource root —
     // confirmed against the actual .deb layout — so this must match, not
     // just "server".
-    let server_dir = app.path().resolve("resources/server", BaseDirectory::Resource)?;
+    //
+    // On Windows, app.path().resolve() returns a `\\?\`-prefixed verbatim
+    // path — confirmed via a real release log ("serving from \\?\C:\Users\
+    // ...\resources\server"). Node's own module resolution doesn't handle
+    // that prefix: passed as the entry-point arg, it crashes on startup with
+    // `EISDIR: illegal operation on a directory, lstat 'C:'` inside
+    // resolveMainPath → Module._findPath → realpathSync — a known upstream
+    // Node/Windows bug (nodejs/node#60435, same root cause reported in
+    // vercel-labs/agent-browser#393), not anything specific to this app.
+    // dunce::simplified() strips the prefix back to a normal `C:\...` path
+    // (a no-op on macOS/Linux, where this prefix never appears).
+    let server_dir = dunce::simplified(&app.path().resolve("resources/server", BaseDirectory::Resource)?).to_path_buf();
     let server_entry = server_dir.join("server.js");
 
     let mut env: Vec<(String, String)> = vec![
