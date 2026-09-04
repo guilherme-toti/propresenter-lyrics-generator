@@ -1,6 +1,6 @@
 "use client";
 
-import { Home, Plus, Settings } from "lucide-react";
+import { Download, Home, Plus, Settings } from "lucide-react";
 
 interface HeaderProps {
   onNewSong: () => void;
@@ -10,9 +10,18 @@ interface HeaderProps {
   showTitle?: boolean;
   showSettings?: boolean;
   onOpenSettings?: () => void;
+  /** Desktop-only — see AppShell.tsx, which only passes this when isDesktopApp(). */
+  onImport?: () => void;
 }
 
-export function Header({ onNewSong, onGoHome, showTitle = true, showSettings, onOpenSettings }: HeaderProps) {
+export function Header({
+  onNewSong,
+  onGoHome,
+  showTitle = true,
+  showSettings,
+  onOpenSettings,
+  onImport,
+}: HeaderProps) {
   return (
     <header className="flex items-center gap-3 border-b border-line bg-cream-50 px-4 py-3">
       <button
@@ -25,6 +34,15 @@ export function Header({ onNewSong, onGoHome, showTitle = true, showSettings, on
       </button>
       {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
       <div className="flex-1" />
+      {onImport && (
+        <button
+          onClick={onImport}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-semibold text-ink/70 transition-colors hover:bg-ink/5 hover:text-ink"
+        >
+          <Download size={14} />
+          Importar
+        </button>
+      )}
       {showSettings && (
         <button
           onClick={onOpenSettings}

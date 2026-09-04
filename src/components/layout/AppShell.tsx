@@ -6,6 +6,7 @@ import { StudioShell } from "@/components/studio/StudioShell";
 import { NewSongDialog } from "@/components/studio/NewSongDialog";
 import { GeneratingOverlay } from "@/components/studio/GeneratingOverlay";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { ImportSongDialog } from "@/components/studio/ImportSongDialog";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -23,6 +24,7 @@ export function AppShell() {
   const mounted = useHasMounted();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
   const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
   const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
@@ -61,6 +63,7 @@ export function AppShell() {
         showTitle={!desktop}
         showSettings={desktop}
         onOpenSettings={() => setSettingsOpen(true)}
+        onImport={desktop ? () => setImportOpen(true) : undefined}
       />
       <div className="flex flex-1 overflow-hidden">
         <main className="flex-1 overflow-y-auto">
@@ -78,6 +81,7 @@ export function AppShell() {
       </div>
       <NewSongDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
       {desktop && <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
+      {desktop && <ImportSongDialog open={importOpen} onClose={() => setImportOpen(false)} />}
       {desktop && (
         <Modal open={discovered !== null} onClose={() => confirm(false)} title="Nova playlist encontrada">
           <div className="flex flex-col gap-4">
