@@ -24,7 +24,10 @@ jobs:
           - platform: "macos-latest"
             args: "--target universal-apple-darwin"
           - platform: "ubuntu-22.04"
-            args: ""
+            # -vv: the AppImage/linuxdeploy step has a history of failing with just
+            # "failed to run linuxdeploy" and no detail at normal verbosity — see
+            # commit that added this comment for the CI run that motivated it.
+            args: "-vv"
           - platform: "windows-latest"
             args: ""
 
