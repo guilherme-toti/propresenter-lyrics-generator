@@ -18,13 +18,31 @@ interface LibraryState {
 
   startSong: (overrides?: Partial<Song>) => void;
   updateSong: (patch: Partial<Song>) => void;
+  /** Clears the active song, same as starting a new one — the empty state is shown until another
+   * song is started or generated. Consistent with "Nova música", which already discards the
+   * current song with no confirmation; this doesn't introduce a new destructive pattern. */
+  goHome: () => void;
 
   setLanguageRaw: (side: "languageA" | "languageB", raw: string) => void;
   /** Swaps one side's raw lyrics for a different catalogue recording's — alignment is left as-is
    * for the user to redo (see LyricsEditors' "Alinhar letra"/"Realinhar com IA"). */
   replaceSide: (side: "languageA" | "languageB", raw: string, source: SideSource, attribution: SideAttribution) => void;
   realignFromManualText: () => void;
-  applyAiRealignment: (result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] }) => void;
+  /** `translatedSide`, when given, also marks that side's literalTranslation status "done" — used
+   * by the automatic literal-translation flow (see useAutoLiteralTranslation), not the manual
+   * "Realinhar com IA" button. */
+  applyAiRealignment: (
+    result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] },
+    translatedSide?: "languageA" | "languageB",
+  ) => void;
+  /** Marks a side's automatic literal translation as not-to-be-retried (cancelled by the user, or
+   * failed) — see useAutoLiteralTranslation. */
+  skipLiteralTranslation: (side: "languageA" | "languageB") => void;
+  /** Undoes a "Buscar" swap so the side goes back to an automatic literal AI translation: drops
+   * the picked recording and its attribution, blanks the raw text, and resets literalTranslation
+   * status to unset — which is exactly the condition useAutoLiteralTranslation watches for, so it
+   * re-translates on its own (against whatever the other side currently says, not a stale copy). */
+  revertToLiteralTranslation: (side: "languageA" | "languageB") => void;
 
   editRow: (rowId: string, side: "a" | "b", value: string) => void;
   editSectionLabel: (rowId: string, label: string) => void;
@@ -58,6 +76,8 @@ export const useLibraryStore = create<LibraryState>()(
 
       startSong: (overrides) => set({ song: createEmptySong(overrides) }),
 
+      goHome: () => set({ song: null }),
+
       updateSong: (patch) => {
         set((state) => (state.song ? { song: touch({ ...state.song, ...patch }) } : state));
       },
@@ -83,19 +103,39 @@ export const useLibraryStore = create<LibraryState>()(
         );
       },
 
-      applyAiRealignment: (result) => {
-        set((state) =>
-          state.song
-            ? {
-                song: touch({
-                  ...state.song,
-                  languageA: result.languageARaw,
-                  languageB: result.languageBRaw,
-                  alignment: result.alignment,
-                }),
-              }
-            : state,
-        );
+      applyAiRealignment: (result, translatedSide) => {
+        set((state) => {
+          if (!state.song) return state;
+          const statusKey = translatedSide === "languageA" ? "literalTranslationA" : "literalTranslationB";
+          return {
+            song: touch({
+              ...state.song,
+              languageA: result.languageARaw,
+              languageB: result.languageBRaw,
+              alignment: result.alignment,
+              ...(translatedSide ? { [statusKey]: "done" } : {}),
+            }),
+          };
+        });
+      },
+
+      skipLiteralTranslation: (side) => {
+        const statusKey = side === "languageA" ? "literalTranslationA" : "literalTranslationB";
+        set((state) => (state.song ? { song: touch({ ...state.song, [statusKey]: "skipped" }) } : state));
+      },
+
+      revertToLiteralTranslation: (side) => {
+        set((state) => {
+          if (!state.song) return state;
+          const sourceKey = side === "languageA" ? "sourceA" : "sourceB";
+          const attributionKey = side === "languageA" ? "attributionA" : "attributionB";
+          const statusKey = side === "languageA" ? "literalTranslationA" : "literalTranslationB";
+          const next = { ...state.song, [side]: "" };
+          delete next[sourceKey];
+          delete next[attributionKey];
+          delete next[statusKey];
+          return { song: touch(next) };
+        });
       },
 
       editRow: (rowId, side, value) => {

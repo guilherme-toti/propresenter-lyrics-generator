@@ -62,6 +62,18 @@ export const aiRealignWireSchema = z.object({
   sections: z.array(wireSectionSchema).min(1),
 });
 
+/**
+ * translateLiterally()'s response: just the translated text, not structured sections — the
+ * structure is enforced afterward by pairLineAligned() against the original (same section/line
+ * counts required), which is stricter and reuses code already trusted for Musixmatch's own
+ * translations rather than asking the model to also get JSON structure right.
+ */
+export const aiLiteralTranslationSchema = z.object({
+  translatedText: z.string().min(1),
+});
+
+export type AiLiteralTranslationResponse = z.infer<typeof aiLiteralTranslationSchema>;
+
 export function expandWireSections(
   sections: z.infer<typeof wireSectionSchema>[],
 ): { label: string; lines: { original: string; translation: string }[] }[] {

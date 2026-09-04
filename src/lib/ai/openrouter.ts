@@ -1,5 +1,6 @@
 import {
   aiLanguageSchema,
+  aiLiteralTranslationSchema,
   aiRealignWireSchema,
   expandWireSections,
   type AiRealignResponse,
@@ -60,6 +61,27 @@ JSON schema:
     { "label": string, "lines": [ [string, string] ] }
   ]
 }`;
+
+/**
+ * Deliberately NOT the realign prompt: realign assumes the two pasted texts are already (roughly)
+ * the same song and reconciles them against each other, which means handing it one side that's
+ * genuinely a different song than the other lets it "reconcile" by discarding one of them — a real
+ * bug, not hypothetical (a user hit exactly this using "Realinhar com IA" to fill a blank side).
+ * This prompt only ever sees ONE text and must reproduce its exact structure, so there's nothing
+ * for it to reconcile away.
+ */
+function literalTranslationSystemPrompt(targetLanguage: ChurchLanguage): string {
+  return `Translate the given song lyrics literally and faithfully into ${targetLanguage}, for a bilingual church slide-building tool — prioritize accuracy to meaning over rhyme or singability.
+
+Preserve the EXACT structure of the input: the same number of blank-line-separated sections, in the same order, and the same number of lines within each section as given. Do not add, remove, merge, reorder, or repeat any line or section, even if the source has repeats, oddities, or seems incomplete — translate it exactly as given, line for line.
+
+Respond with ONLY the JSON object below — no markdown code fences, no commentary before or after it.
+
+JSON schema:
+{
+  "translatedText": string
+}`;
+}
 
 function extractJson(text: string): unknown {
   const withoutFences = text.replace(/```json\s*|```/gi, "").trim();
@@ -124,7 +146,12 @@ function assertLooksLikeLyrics(song: AiSongResponse): void {
 /** Used only for the language-identification call — small, fast, cheap; no translation quality at stake. */
 const LANGUAGE_ONLY_MODEL = "openai/gpt-4o-mini";
 
-async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOverride?: string): Promise<unknown> {
+async function callOpenRouter(
+  systemPrompt: string,
+  userPrompt: string,
+  modelOverride?: string,
+  signal?: AbortSignal,
+): Promise<unknown> {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new OpenRouterConfigError(
@@ -150,6 +177,7 @@ async function callOpenRouter(systemPrompt: string, userPrompt: string, modelOve
         { role: "user", content: userPrompt },
       ],
     }),
+    signal,
   });
 
   if (!res.ok) {
@@ -271,12 +299,37 @@ export async function generateSongWithAi(picked: TrackCandidate): Promise<Genera
   return finalizeSong(picked, originalLanguage, blankTranslationSections(original.text), original, null);
 }
 
-export async function realignSongWithAi(languageARaw: string, languageBRaw: string): Promise<AiRealignResponse> {
+export async function realignSongWithAi(
+  languageARaw: string,
+  languageBRaw: string,
+  signal?: AbortSignal,
+): Promise<AiRealignResponse> {
   const userPrompt = `Editor A (as pasted):\n---\n${languageARaw}\n---\n\nEditor B (as pasted):\n---\n${languageBRaw}\n---`;
-  const parsed = await callOpenRouter(REALIGN_SYSTEM_PROMPT, userPrompt);
+  const parsed = await callOpenRouter(REALIGN_SYSTEM_PROMPT, userPrompt, undefined, signal);
   const result = aiRealignWireSchema.safeParse(parsed);
   if (!result.success) {
     throw malformedResponse("realign", result.error);
   }
   return { sections: expandWireSections(result.data.sections) };
+}
+
+/**
+ * Translates one side's text literally into targetLanguage — used to fill a blank side (see
+ * useAutoLiteralTranslation and LanguageSourceCard's "Traduzir com IA"), never to reconcile two
+ * texts against each other (that's realignSongWithAi, a different job — see the system prompt's
+ * own comment for why conflating them broke a real case). The caller must pair the result against
+ * `originalText` with pairLineAligned() before trusting it: unlike realign's JSON-schema-enforced
+ * shape, this only promises matching structure via prompt instructions, not validation.
+ */
+export async function translateLiterally(
+  originalText: string,
+  targetLanguage: ChurchLanguage,
+  signal?: AbortSignal,
+): Promise<string> {
+  const parsed = await callOpenRouter(literalTranslationSystemPrompt(targetLanguage), originalText, undefined, signal);
+  const result = aiLiteralTranslationSchema.safeParse(parsed);
+  if (!result.success) {
+    throw malformedResponse("translate-literally", result.error);
+  }
+  return result.data.translatedText;
 }

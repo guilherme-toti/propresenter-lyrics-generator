@@ -36,6 +36,9 @@ export const songSchema = z.object({
   sourceB: sideSourceSchema.optional(),
   attributionA: sideAttributionSchema.optional(),
   attributionB: sideAttributionSchema.optional(),
+  literalTranslationA: z.enum(["done", "skipped"]).optional(),
+  literalTranslationB: z.enum(["done", "skipped"]).optional(),
+  translatableSide: z.enum(["languageA", "languageB"]).optional(),
   createdAt: z.number(),
   updatedAt: z.number(),
 });

@@ -31,6 +31,7 @@ export function AppShell() {
   const generationError = useGenerationStore((s) => s.error);
   const dismissGeneration = useGenerationStore((s) => s.finish);
   const startSong = useLibraryStore((s) => s.startSong);
+  const goHome = useLibraryStore((s) => s.goHome);
 
   // Escape hatch from a failed generation: start the blank song the user would otherwise
   // have to go back and ask for through "Nova música" → "Criar manualmente".
@@ -44,7 +45,7 @@ export function AppShell() {
   if (!mounted) {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
-        <Header onNewSong={openNewSongDialog} />
+        <Header onNewSong={openNewSongDialog} onGoHome={goHome} />
         <div className="flex flex-1" />
       </div>
     );
@@ -56,6 +57,7 @@ export function AppShell() {
     <div className="flex h-screen flex-col overflow-hidden">
       <Header
         onNewSong={openNewSongDialog}
+        onGoHome={goHome}
         showTitle={!desktop}
         showSettings={desktop}
         onOpenSettings={() => setSettingsOpen(true)}

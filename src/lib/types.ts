@@ -58,6 +58,24 @@ export interface Song {
   sourceB?: SideSource;
   attributionA?: SideAttribution;
   attributionB?: SideAttribution;
+  /**
+   * Set once an automatic literal AI translation has run for a side that came back blank from
+   * Musixmatch (see useAutoLiteralTranslation) — "done" drives the "Tradução literal (IA)" label
+   * in LanguageSourceCard, "skipped" (cancelled by the user, or failed) means don't auto-retry.
+   * Undefined means never attempted, i.e. still eligible to auto-start. Deliberately separate from
+   * attributionA/B, which specifically carries Musixmatch's copyright/tracking obligations and
+   * doesn't apply to AI-generated text.
+   */
+  literalTranslationA?: "done" | "skipped";
+  literalTranslationB?: "done" | "skipped";
+  /**
+   * Which side is eligible for "Traduzir com IA" — set once at generation to whichever side is
+   * NOT the picked recording's own lyrics, and never changed afterward, including by a later
+   * "Buscar" swap on either side (which sets a SideSource too, but doesn't change which side was
+   * originally the anchor — see LyricsEditors' canOfferAiTranslation). Undefined for manually
+   * created songs, which have no such anchor to protect.
+   */
+  translatableSide?: "languageA" | "languageB";
   createdAt: number;
   updatedAt: number;
 }

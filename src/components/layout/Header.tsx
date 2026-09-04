@@ -1,9 +1,10 @@
 "use client";
 
-import { Plus, Settings } from "lucide-react";
+import { Home, Plus, Settings } from "lucide-react";
 
 interface HeaderProps {
   onNewSong: () => void;
+  onGoHome: () => void;
   // The desktop app's window title bar already shows this — repeating it
   // here would be a visible duplicate, so AppShell only sets this on web.
   showTitle?: boolean;
@@ -11,9 +12,17 @@ interface HeaderProps {
   onOpenSettings?: () => void;
 }
 
-export function Header({ onNewSong, showTitle = true, showSettings, onOpenSettings }: HeaderProps) {
+export function Header({ onNewSong, onGoHome, showTitle = true, showSettings, onOpenSettings }: HeaderProps) {
   return (
     <header className="flex items-center gap-3 border-b border-line bg-cream-50 px-4 py-3">
+      <button
+        onClick={onGoHome}
+        aria-label="Início"
+        title="Início"
+        className="rounded-full p-2 text-ink/60 transition-colors hover:bg-ink/5 hover:text-ink"
+      >
+        <Home size={18} />
+      </button>
       {showTitle && <p className="font-display text-base font-semibold text-ink">PMA Lyrics Studio</p>}
       <div className="flex-1" />
       {showSettings && (

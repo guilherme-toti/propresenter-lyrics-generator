@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Loader2, X } from "lucide-react";
+import { Loader2, Send, X } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
@@ -133,7 +133,7 @@ export function ExportFab({ song }: { song: Song }) {
         title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
         className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_24px_rgba(255,255,255,0.55)] transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+        {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         Enviar para ProPresenter
       </button>
       <PlaylistPickerModal

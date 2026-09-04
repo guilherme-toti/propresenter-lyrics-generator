@@ -21,7 +21,7 @@ export async function POST(request: Request) {
   }
 
   try {
-    const aiResponse = await realignSongWithAi(parsed.data.languageARaw, parsed.data.languageBRaw);
+    const aiResponse = await realignSongWithAi(parsed.data.languageARaw, parsed.data.languageBRaw, request.signal);
     const alignment = buildAlignmentFromAiSections(aiResponse.sections);
     const languageARaw = reconstructRaw(aiResponse.sections, "original");
     const languageBRaw = reconstructRaw(aiResponse.sections, "translation");

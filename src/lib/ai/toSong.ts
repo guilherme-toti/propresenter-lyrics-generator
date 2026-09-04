@@ -48,5 +48,7 @@ export function aiResponseToSong(
     sourceB: originalIsA ? undefined : generated.originalSource,
     attributionA: originalIsA ? generated.originalSource.attribution : (generated.translationAttribution ?? undefined),
     attributionB: originalIsA ? (generated.translationAttribution ?? undefined) : generated.originalSource.attribution,
+    // The side NOT backed by the picked recording — see Song.translatableSide's own comment.
+    translatableSide: originalIsA ? "languageB" : "languageA",
   });
 }
