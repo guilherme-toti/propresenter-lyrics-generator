@@ -61,7 +61,50 @@ function assembleServer() {
     });
   }
 
+  pruneMuslNativeBinaries(path.join(serverResourceDir, "node_modules"));
+
   console.log(`[tauri:prebuild] assembled standalone server -> ${path.relative(repoRoot, serverResourceDir)}`);
+}
+
+/**
+ * `npm ci` on Linux installs BOTH the glibc and musl builds of packages with
+ * platform-conditional native binaries (confirmed for sharp: `npm ci` on a real
+ * glibc Ubuntu box still installs `@img/sharp-linuxmusl-x64` alongside
+ * `@img/sharp-linux-x64` — npm's optional-dependency resolution doesn't filter
+ * by libc flavor), and Next's standalone-output tracer can't statically tell
+ * which one sharp's own runtime `require()` will pick, so it conservatively
+ * bundles both. Our sidecar Node is always a standard glibc build (see
+ * prepareSidecar() below) — the musl one can never actually load under it — but
+ * its mere presence in the AppDir breaks the Linux release: linuxdeploy scans
+ * every ELF file for shared-library deps to bundle into the AppImage, and dies
+ * because `libc.musl-x86_64.so.1` isn't a real library on a glibc system
+ * ("ERROR: Could not find dependency: libc.musl-x86_64.so.1" in a `tauri build
+ * -vv` log, surfacing only as "failed to run linuxdeploy" at normal verbosity).
+ * Pruning them is a no-op for runtime behavior and unblocks the AppImage build.
+ */
+function pruneMuslNativeBinaries(dir) {
+  if (!existsSync(dir)) return;
+  const removed = [];
+
+  function walk(current) {
+    for (const entry of readdirSync(current, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const full = path.join(current, entry.name);
+      if (/musl/i.test(entry.name)) {
+        rmSync(full, { recursive: true, force: true });
+        removed.push(path.relative(repoRoot, full));
+        continue;
+      }
+      walk(full);
+    }
+  }
+  walk(dir);
+
+  if (removed.length > 0) {
+    console.log(
+      `[tauri:prebuild] pruned musl-libc native binaries (dead weight — our sidecar Node is always glibc):\n  ${removed.join("\n  ")}`,
+    );
+  }
 }
 
 /**

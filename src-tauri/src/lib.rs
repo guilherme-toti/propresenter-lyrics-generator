@@ -31,13 +31,22 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(ServerProcess(Mutex::new(None)))
         .setup(|app| {
-            if cfg!(debug_assertions) {
-                app.handle().plugin(
-                    tauri_plugin_log::Builder::default()
-                        .level(log::LevelFilter::Info)
-                        .build(),
-                )?;
-            }
+            // Always on, not just debug builds: release builds were flying
+            // completely blind — the bundled sidecar's stdout/stderr (see
+            // spawn_bundled_server's event loop below) went to log::info!/
+            // log::error! calls with nowhere to land, so a release-only
+            // failure (e.g. the sidecar crashing on a specific Windows
+            // machine) left no evidence to diagnose it from. LogDir writes
+            // to the OS's standard per-app log location (app.path().app_log_dir()).
+            app.handle().plugin(
+                tauri_plugin_log::Builder::default()
+                    .level(log::LevelFilter::Info)
+                    .targets([
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir { file_name: None }),
+                        tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
+                    ])
+                    .build(),
+            )?;
 
             // A crashed/aborted process gives the user nothing but a system crash
             // reporter — a native dialog explaining what actually went wrong (and
@@ -91,7 +100,16 @@ fn create_main_window(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
         format!("http://{LOOPBACK}:3000")
     } else {
         spawn_bundled_server(app, PROD_PORT)?;
-        wait_for_server(PROD_PORT, Duration::from_secs(20));
+        // 45s, not 20s: a fresh Windows install has antivirus/Defender doing
+        // real-time scanning of every file the sidecar touches on its first
+        // run (node.exe itself, then every file under resources/server/ as
+        // the Next.js server requires() its way through node_modules), which
+        // can push first-launch startup well past what a warm run needs.
+        if !wait_for_server(PROD_PORT, Duration::from_secs(45)) {
+            log::error!(
+                "bundled server never accepted a connection on {LOOPBACK}:{PROD_PORT} within the timeout — opening the window anyway, expect a connection error"
+            );
+        }
         format!("http://{LOOPBACK}:{PROD_PORT}")
     };
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External(base_url.parse()?))
@@ -194,10 +212,11 @@ fn spawn_bundled_server(
         .shell()
         .sidecar("node")?
         .args([server_entry.to_string_lossy().to_string()])
-        .current_dir(server_dir)
+        .current_dir(&server_dir)
         .envs(env);
 
     let (mut events, child) = command.spawn()?;
+    log::info!("[server] spawned sidecar (pid {}), serving from {}", child.pid(), server_dir.display());
 
     app.state::<ServerProcess>().0.lock().unwrap().replace(child);
 
@@ -211,6 +230,13 @@ fn spawn_bundled_server(
                     log::error!("[server] {}", String::from_utf8_lossy(&line));
                 }
                 CommandEvent::Error(err) => log::error!("[server] {err}"),
+                // If this fires before wait_for_server() reports success, the
+                // sidecar died on startup — exactly the kind of failure this
+                // logging was added for (a Windows install stuck on a
+                // connection-refused screen with previously no evidence why).
+                CommandEvent::Terminated(payload) => {
+                    log::error!("[server] sidecar exited: code={:?} signal={:?}", payload.code, payload.signal);
+                }
                 _ => {}
             }
         }
@@ -237,12 +263,14 @@ fn load_user_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
 /// Blocks setup until the bundled server accepts TCP connections, or the
 /// timeout elapses (the window opens against whatever happened last either
 /// way — a slow-starting server just shows a connection error briefly).
-fn wait_for_server(port: u16, timeout: Duration) {
+/// Returns whether it actually came up in time.
+fn wait_for_server(port: u16, timeout: Duration) -> bool {
     let deadline = Instant::now() + timeout;
     while Instant::now() < deadline {
         if TcpStream::connect((LOOPBACK, port)).is_ok() {
-            return;
+            return true;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
+    false
 }
