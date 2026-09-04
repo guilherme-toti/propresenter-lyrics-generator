@@ -133,7 +133,7 @@ function hostTargetTriple() {
 function prepareSidecar() {
   const triple = hostTargetTriple();
   const isWindows = triple.includes("windows");
-  const dest = path.join(binariesDir, `node-${triple}${isWindows ? ".exe" : ""}`);
+  const dest = path.join(binariesDir, `pma-node-${triple}${isWindows ? ".exe" : ""}`);
 
   mkdirSync(binariesDir, { recursive: true });
   copyFileSync(process.execPath, dest);
@@ -161,7 +161,7 @@ async function ensureOtherMacTriple(hostTriple) {
   if (process.platform !== "darwin") return;
   const otherTriple = hostTriple === "aarch64-apple-darwin" ? "x86_64-apple-darwin" : "aarch64-apple-darwin";
   const otherArch = otherTriple.startsWith("aarch64") ? "arm64" : "x64";
-  const dest = path.join(binariesDir, `node-${otherTriple}`);
+  const dest = path.join(binariesDir, `pma-node-${otherTriple}`);
   if (existsSync(dest)) return;
 
   const version = process.version;
@@ -200,11 +200,11 @@ async function ensureOtherMacTriple(hostTriple) {
  */
 function ensureUniversalMacBinary() {
   if (process.platform !== "darwin") return;
-  const dest = path.join(binariesDir, "node-universal-apple-darwin");
+  const dest = path.join(binariesDir, "pma-node-universal-apple-darwin");
   if (existsSync(dest)) return;
 
-  const aarch64Path = path.join(binariesDir, "node-aarch64-apple-darwin");
-  const x64Path = path.join(binariesDir, "node-x86_64-apple-darwin");
+  const aarch64Path = path.join(binariesDir, "pma-node-aarch64-apple-darwin");
+  const x64Path = path.join(binariesDir, "pma-node-x86_64-apple-darwin");
   execFileSync("lipo", ["-create", "-output", dest, aarch64Path, x64Path]);
   chmodSync(dest, 0o755);
 

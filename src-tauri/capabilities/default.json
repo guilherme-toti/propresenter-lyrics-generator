@@ -16,7 +16,7 @@
     "dialog:default",
     {
       "identifier": "shell:allow-spawn",
-      "allow": [{ "name": "binaries/node", "sidecar": true }]
+      "allow": [{ "name": "binaries/pma-node", "sidecar": true }]
     }
   ]
 }

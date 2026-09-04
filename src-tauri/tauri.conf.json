@@ -28,7 +28,7 @@
     "targets": "all",
     "createUpdaterArtifacts": true,
     "externalBin": [
-      "binaries/node"
+      "binaries/pma-node"
     ],
     "resources": [
       "resources/server/**/*"

@@ -159,6 +159,19 @@ fn check_for_updates(app: &AppHandle) {
                     return;
                 }
                 tauri::async_runtime::spawn(async move {
+                    // The installer that's about to launch will try to overwrite
+                    // this app's own files, including the bundled sidecar's
+                    // node.exe. On Windows the installer's "app already running"
+                    // check only knows about the main executable — it has no
+                    // idea the sidecar is a separate child process, so it'd be
+                    // left running and holding node.exe locked, which breaks
+                    // the install with "Error opening file for writing:
+                    // node.exe". Kill it ourselves first so the file is free
+                    // by the time the installer touches it.
+                    if let Some(child) = install_handle.state::<ServerProcess>().0.lock().unwrap().take() {
+                        let _ = child.kill();
+                    }
+
                     // Windows exits the app itself once the installer launches
                     // successfully; macOS/Linux (AppImage) need this explicit
                     // restart to actually run the newly installed version.
@@ -181,8 +194,8 @@ fn check_for_updates(app: &AppHandle) {
     });
 }
 
-/// Spawns the bundled Node runtime (`binaries/node-<target-triple>`, declared
-/// as a Tauri sidecar in `tauri.conf.json`) against the standalone Next.js
+/// Spawns the bundled Node runtime (`binaries/pma-node-<target-triple>`,
+/// declared as a Tauri sidecar in `tauri.conf.json`) against the standalone Next.js
 /// server assembled into `resources/server` by `npm run tauri:prebuild`.
 fn spawn_bundled_server(
     app: &tauri::AppHandle,
@@ -221,7 +234,7 @@ fn spawn_bundled_server(
 
     let command = app
         .shell()
-        .sidecar("node")?
+        .sidecar("pma-node")?
         .args([server_entry.to_string_lossy().to_string()])
         .current_dir(&server_dir)
         .envs(env);
