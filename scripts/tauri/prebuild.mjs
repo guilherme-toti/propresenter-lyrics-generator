@@ -18,11 +18,13 @@ import {
   copyFileSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   rmSync,
   cpSync,
   writeFileSync,
 } from "node:fs";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
@@ -97,11 +99,90 @@ function prepareSidecar() {
   console.log(
     `[tauri:prebuild] bundled sidecar Node runtime -> ${path.relative(repoRoot, dest)} (copied from ${process.execPath}, Node ${process.version})`,
   );
+
+  return triple;
 }
 
-if (process.argv.includes("--sidecar-only")) {
-  ensureResourcesPlaceholder();
-} else {
-  assembleServer();
+/**
+ * `tauri build --target universal-apple-darwin` (see .github/workflows/release.yml)
+ * compiles two separate sub-binaries (x86_64 + aarch64) and lipos them together —
+ * but externalBin resources aren't merged: Tauri's build.rs validates that a
+ * `binaries/node-<triple>` file exists for EACH sub-triple individually (confirmed
+ * by the CI failure this fixes: "resource path 'binaries/node-x86_64-apple-darwin'
+ * doesn't exist" when building on an aarch64 runner — see
+ * https://v2.tauri.app/develop/sidecar/). `process.execPath` only ever gives us the
+ * host's own architecture, so the other one has to come from an official Node.js
+ * download instead of a copy.
+ */
+async function ensureOtherMacTriple(hostTriple) {
+  if (process.platform !== "darwin") return;
+  const otherTriple = hostTriple === "aarch64-apple-darwin" ? "x86_64-apple-darwin" : "aarch64-apple-darwin";
+  const otherArch = otherTriple.startsWith("aarch64") ? "arm64" : "x64";
+  const dest = path.join(binariesDir, `node-${otherTriple}`);
+  if (existsSync(dest)) return;
+
+  const version = process.version;
+  const tarballName = `node-${version}-darwin-${otherArch}.tar.gz`;
+  const url = `https://nodejs.org/dist/${version}/${tarballName}`;
+  console.log(`[tauri:prebuild] downloading ${otherTriple} Node sidecar for the universal macOS build -> ${url}`);
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    throw new Error(`Failed to download ${url} for the universal macOS sidecar: ${res.status} ${res.statusText}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+
+  const tmpDir = mkdtempSync(path.join(os.tmpdir(), "pma-node-sidecar-"));
+  const tarballPath = path.join(tmpDir, tarballName);
+  writeFileSync(tarballPath, buffer);
+  execFileSync("tar", ["-xzf", tarballPath, "-C", tmpDir]);
+
+  const extractedNode = path.join(tmpDir, `node-${version}-darwin-${otherArch}`, "bin", "node");
+  mkdirSync(binariesDir, { recursive: true });
+  copyFileSync(extractedNode, dest);
+  chmodSync(dest, 0o755);
+  rmSync(tmpDir, { recursive: true, force: true });
+
+  console.log(`[tauri:prebuild] bundled sidecar Node runtime -> ${path.relative(repoRoot, dest)} (downloaded ${tarballName})`);
 }
-prepareSidecar();
+
+/**
+ * Compiling for `universal-apple-darwin` needs the two per-triple sidecars above
+ * (one per `cargo build` sub-invocation) — but the *bundling* step that follows
+ * looks up the externalBin by the pseudo-target name itself, wanting a single
+ * `binaries/node-universal-apple-darwin` lipo'd fat binary (confirmed by the CI
+ * failure this fixes: "Failed to copy external binaries: resource path
+ * `binaries/node-universal-apple-darwin` doesn't exist", which only surfaces
+ * *after* both architectures already compiled successfully).
+ */
+function ensureUniversalMacBinary() {
+  if (process.platform !== "darwin") return;
+  const dest = path.join(binariesDir, "node-universal-apple-darwin");
+  if (existsSync(dest)) return;
+
+  const aarch64Path = path.join(binariesDir, "node-aarch64-apple-darwin");
+  const x64Path = path.join(binariesDir, "node-x86_64-apple-darwin");
+  execFileSync("lipo", ["-create", "-output", dest, aarch64Path, x64Path]);
+  chmodSync(dest, 0o755);
+
+  console.log(`[tauri:prebuild] merged universal sidecar Node runtime -> ${path.relative(repoRoot, dest)}`);
+}
+
+async function main() {
+  const isSidecarOnly = process.argv.includes("--sidecar-only");
+  if (isSidecarOnly) {
+    ensureResourcesPlaceholder();
+  } else {
+    assembleServer();
+  }
+  const hostTriple = prepareSidecar();
+  // Only the full `tauri build` needs the second macOS architecture (for
+  // `--target universal-apple-darwin`) — skip it for `tauri:dev`'s fast,
+  // network-free --sidecar-only path, which never builds a universal binary.
+  if (!isSidecarOnly) {
+    await ensureOtherMacTriple(hostTriple);
+    ensureUniversalMacBinary();
+  }
+}
+
+await main();

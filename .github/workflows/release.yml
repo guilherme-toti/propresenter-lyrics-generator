@@ -46,7 +46,7 @@ jobs:
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libfuse2
 
       - name: install dependencies
         run: npm ci
@@ -56,6 +56,12 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # linuxdeploy (used to build the AppImage) bundles its own copies of itself
+          # and its plugins as nested AppImages, which normally self-mount via FUSE —
+          # unavailable/unreliable on GitHub's ubuntu-22.04 runners even with libfuse2
+          # installed above. This makes them extract-and-run instead, sidestepping FUSE
+          # entirely. https://github.com/tauri-apps/tauri/issues/14796
+          APPIMAGE_EXTRACT_AND_RUN: "1"
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "PMA Lyrics Studio ${{ github.ref_name }}"
