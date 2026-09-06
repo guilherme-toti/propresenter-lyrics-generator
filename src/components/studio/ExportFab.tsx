@@ -17,6 +17,19 @@ interface SavedInfo {
 
 const SAVED_MESSAGE_TIMEOUT_MS = 15_000;
 
+/** Last path segment, minus the ".pro" extension — works for both "/a/b/Name.pro" (library save,
+ * where the server may have adjusted the name, e.g. appending " (2)") and a plain "Name.pro"
+ * (browser download's Content-Disposition filename). */
+function baseNameWithoutExt(fileNameOrPath: string): string {
+  const base = fileNameOrPath.split(/[\\/]/).pop() ?? fileNameOrPath;
+  return base.replace(/\.pro$/i, "");
+}
+
+/** Best-effort — clicking the export button isn't undone by a clipboard permission failure. */
+function copyToClipboard(text: string) {
+  navigator.clipboard?.writeText(text).catch(() => {});
+}
+
 export function ExportFab({ song }: { song: Song }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
@@ -50,6 +63,11 @@ export function ExportFab({ song }: { song: Song }) {
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Falha ao exportar.");
 
+    // data.savedTo reflects the name actually written to disk, which can differ from what was
+    // asked for (writeUniqueFile appends " (2)" etc. on a coincidental collision) — copy that,
+    // not the requested name, so pasting into ProPresenter's search always finds the real file.
+    if (typeof data.savedTo === "string") copyToClipboard(baseNameWithoutExt(data.savedTo));
+
     setSaved({ title: overrides?.fileName || song.title || "sua música", playlistName: activePlaylist?.name ?? null });
   };
 
@@ -67,6 +85,7 @@ export function ExportFab({ song }: { song: Song }) {
     const disposition = res.headers.get("Content-Disposition") ?? "";
     const match = /filename="?([^"]+)"?/.exec(disposition);
     const filename = match ? decodeURIComponent(match[1]) : `${song.title || "musica"}.pro`;
+    copyToClipboard(baseNameWithoutExt(filename));
 
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
