@@ -13,34 +13,15 @@ function targetLanguageFor(side: Side): "English" | "Português (Brasil)" {
   return side === "languageA" ? "Português (Brasil)" : "English";
 }
 
-/** The one side that's blank while the other has real content and hasn't been auto-translated (or
- * had that skipped) yet — undefined either way (both blank, both filled, or already attempted)
- * means there's nothing for this hook to do. */
-function blankSideNeedingTranslation(song: Song): Side | null {
-  const aBlank = !song.languageA.trim();
-  const bBlank = !song.languageB.trim();
-  if (aBlank === bBlank) return null;
-  const side: Side = aBlank ? "languageA" : "languageB";
-  const status = side === "languageA" ? song.literalTranslationA : song.literalTranslationB;
-  return status === undefined ? side : null;
-}
-
 /**
- * Fills a blank translation side with a literal AI translation automatically, right when the song
- * screen shows it — instead of the user having to notice and click "Realinhar com IA" themselves.
- * Calls /api/translate-literally (translation only — never /api/realign-song, which reconciles
- * two texts against each other and, given a genuinely different song on one side, would "reconcile"
- * by discarding it rather than translating). Non-blocking: this never disables anything else in
- * the UI (export included) while it runs, and is cancellable.
- *
- * Also exposes retranslate() for LyricsEditors' "Traduzir com IA" link, which must be able to
- * fire even when neither side's literalTranslation status is set to begin with — e.g. Musixmatch
- * already supplied a real translation for both sides, so the auto-fill effect below never ran and
- * never touched either status field. An earlier version had the button just clear that (already
- * undefined) field and rely on the effect noticing — a real bug: clearing a field that's already
- * undefined is not a value change, so the effect's dependency array never saw a difference and
- * never re-ran, leaving the just-blanked side empty with no request ever sent. retranslate() calls
- * the same underlying request directly instead of hoping a store update coincidentally triggers it.
+ * Runs a literal AI translation for one side, on demand — only ever started by the user clicking
+ * LyricsEditors' "Traduzir com IA" link (via retranslate() below), never automatically. A blank
+ * side with no official translation (e.g. Musixmatch had nothing for the other language) is left
+ * blank until the user asks for one; this hook just knows how to run and track that request once
+ * they do. Calls /api/translate-literally (translation only — never /api/realign-song, which
+ * reconciles two texts against each other and, given a genuinely different song on one side, would
+ * "reconcile" by discarding it rather than translating). Non-blocking: this never disables anything
+ * else in the UI (export included) while it runs, and is cancellable.
  */
 export function useAutoLiteralTranslation(song: Song | null) {
   const applyAiRealignment = useLibraryStore((s) => s.applyAiRealignment);
@@ -51,16 +32,11 @@ export function useAutoLiteralTranslation(song: Song | null) {
   // effect run just to cover that one transition.
   const [translating, setTranslating] = useState<{ songId: string; side: Side } | null>(null);
   // Identifies the latest attempt; a completion/finally only acts if it's still the one in
-  // abortRef, which is what makes React 18 Strict Mode's dev-only mount→cleanup→mount safe: the
-  // cleanup aborts the first attempt, the remount starts a second one and reassigns abortRef, and
-  // the first attempt's now-stale finally callback (running after, since abort's rejection is a
-  // microtask) sees the mismatch and no-ops instead of clobbering the second attempt's state. An
-  // earlier version also gated on a "did we already try this key" ref, which seemed like a good
-  // idea but actually broke this exact case — it blocked the necessary second attempt too.
+  // abortRef — so a superseded request (song switched away from, or the user re-clicked
+  // "Traduzir com IA" before the first attempt landed) can't clobber state that no longer belongs
+  // to it.
   const abortRef = useRef<AbortController | null>(null);
 
-  // Shared by the auto-fill effect below and retranslate() — one real request-sending path, not
-  // two copies that could drift.
   function start(songId: string, side: Side, knownText: string) {
     abortRef.current?.abort(); // supersede whatever (if anything) was already in flight
     const controller = new AbortController();
@@ -98,18 +74,12 @@ export function useAutoLiteralTranslation(song: Song | null) {
     return controller;
   }
 
+  // Nothing here starts a translation — only cancels one already in flight if the user navigates
+  // to a different song (or away from the studio) before it lands, so a stale response never gets
+  // applied to whatever's showing now.
   useEffect(() => {
-    if (!song) return;
-    const side = blankSideNeedingTranslation(song);
-    if (!side) return;
-    const knownSide: Side = side === "languageA" ? "languageB" : "languageA";
-    const controller = start(song.id, side, song[knownSide]);
-
-    // Song changed (or this component unmounted) while the request was still in flight — abort it
-    // so a stale response never gets applied to whatever's showing now.
-    return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song?.id, song?.literalTranslationA, song?.literalTranslationB]);
+    return () => abortRef.current?.abort();
+  }, [song?.id]);
 
   const translatingSide = translating && song && translating.songId === song.id ? translating.side : null;
 

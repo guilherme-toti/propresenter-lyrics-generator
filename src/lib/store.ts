@@ -29,19 +29,21 @@ interface LibraryState {
   replaceSide: (side: "languageA" | "languageB", raw: string, source: SideSource, attribution: SideAttribution) => void;
   realignFromManualText: () => void;
   /** `translatedSide`, when given, also marks that side's literalTranslation status "done" — used
-   * by the automatic literal-translation flow (see useAutoLiteralTranslation), not the manual
+   * by the on-demand literal-translation flow (see useAutoLiteralTranslation), not the manual
    * "Realinhar com IA" button. */
   applyAiRealignment: (
     result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] },
     translatedSide?: "languageA" | "languageB",
   ) => void;
-  /** Marks a side's automatic literal translation as not-to-be-retried (cancelled by the user, or
-   * failed) — see useAutoLiteralTranslation. */
+  /** Marks a side's literal translation attempt as not-to-be-retried automatically (cancelled by
+   * the user, or failed) — see useAutoLiteralTranslation. The user can still ask again via
+   * "Traduzir com IA", which doesn't check this status. */
   skipLiteralTranslation: (side: "languageA" | "languageB") => void;
-  /** Undoes a "Buscar" swap so the side goes back to an automatic literal AI translation: drops
-   * the picked recording and its attribution, blanks the raw text, and resets literalTranslation
-   * status to unset — which is exactly the condition useAutoLiteralTranslation watches for, so it
-   * re-translates on its own (against whatever the other side currently says, not a stale copy). */
+  /** Undoes a "Buscar" swap so the side goes back to blank, eligible for a literal AI translation
+   * again: drops the picked recording and its attribution (LyricsEditors' canOfferAiTranslation
+   * needs sourceA/B cleared to offer "Traduzir com IA" again on a fallback/non-translatableSide
+   * song), blanks the raw text, and resets literalTranslation status to unset (so LanguageSourceCard
+   * stops labeling it "Tradução literal" until a new translation actually completes). */
   revertToLiteralTranslation: (side: "languageA" | "languageB") => void;
 
   editRow: (rowId: string, side: "a" | "b", value: string) => void;

@@ -6,6 +6,14 @@ import type { GeneratedSong } from "./openrouter";
 type SectionLines = { lines: { original: string; translation: string }[] };
 
 export function reconstructRaw(sections: SectionLines[], side: "original" | "translation"): string {
+  // A side with no real content anywhere (e.g. blankTranslationSections() in openrouter.ts, used
+  // when no official translation exists) must come back as "" — not a join of empty strings, which
+  // produces a string of bare newlines that *looks* blank in the textarea but isn't actually "",
+  // so the placeholder never shows and downstream blank-side checks (canOfferAiTranslation) would
+  // need every caller to remember to .trim() first instead of just comparing to "".
+  const hasContent = sections.some((section) => section.lines.some((line) => line[side].trim() !== ""));
+  if (!hasContent) return "";
+
   return sections.map((section) => section.lines.map((line) => line[side]).join("\n")).join("\n\n");
 }
 

@@ -6,7 +6,9 @@ import type { Song } from "@/lib/types";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
+import { ExportOverwriteModal } from "@/components/studio/ExportOverwriteModal";
 import { playlistStillExists } from "@/lib/desktop/playlistStillExists";
+import type { ExportConflict } from "@/lib/propresenter/libraries";
 
 interface SavedInfo {
   title: string;
@@ -20,6 +22,9 @@ export function ExportFab({ song }: { song: Song }) {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [conflict, setConflict] = useState<{ name: string; found: ExportConflict } | null>(null);
+  const [conflictSaving, setConflictSaving] = useState(false);
+  const [conflictError, setConflictError] = useState<string | null>(null);
   const canExport = song.alignment.length > 0;
 
   const libraryFolder = useDesktopStore((s) => s.libraryFolder);
@@ -33,16 +38,19 @@ export function ExportFab({ song }: { song: Song }) {
     return () => clearTimeout(timer);
   }, [saved]);
 
-  const exportToLibrary = async (destinationFolder: string) => {
+  const exportToLibrary = async (
+    destinationFolder: string,
+    overrides?: { fileName?: string; overwritePath?: string },
+  ) => {
     const res = await fetch("/api/export/propresenter", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ song, destinationFolder }),
+      body: JSON.stringify({ song, destinationFolder, ...overrides }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error ?? "Falha ao exportar.");
 
-    setSaved({ title: song.title || "sua música", playlistName: activePlaylist?.name ?? null });
+    setSaved({ title: overrides?.fileName || song.title || "sua música", playlistName: activePlaylist?.name ?? null });
   };
 
   const downloadFile = async () => {
@@ -85,6 +93,26 @@ export function ExportFab({ song }: { song: Song }) {
             return;
           }
         }
+
+        // Never blocks the export on failure — an unreachable check just falls back to the
+        // existing, always-safe writeUniqueFile behavior (appends " (2)" instead of overwriting).
+        const name = song.title || "Música sem título";
+        const found = await fetch("/api/export/check-conflict", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ libraryFolder, name }),
+        })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((data) => (data?.conflict as ExportConflict | null) ?? null)
+          .catch(() => null);
+
+        if (found) {
+          setStatus("idle");
+          setConflictError(null);
+          setConflict({ name, found });
+          return;
+        }
+
         await exportToLibrary(libraryFolder);
       } else {
         await downloadFile();
@@ -93,6 +121,20 @@ export function ExportFab({ song }: { song: Song }) {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha ao exportar.");
       setStatus("error");
+    }
+  };
+
+  const handleConfirmOverwrite = async (name: string, overwritePath: string | null) => {
+    if (!libraryFolder) return;
+    setConflictSaving(true);
+    setConflictError(null);
+    try {
+      await exportToLibrary(libraryFolder, { fileName: name, overwritePath: overwritePath ?? undefined });
+      setConflict(null);
+    } catch (err) {
+      setConflictError(err instanceof Error ? err.message : "Falha ao exportar.");
+    } finally {
+      setConflictSaving(false);
     }
   };
 
@@ -144,6 +186,18 @@ export function ExportFab({ song }: { song: Song }) {
         title="A playlist selecionada não existe mais"
         description="Escolha outra playlist de destino (ou feche e exporte mesmo assim, sem uma selecionada)."
       />
+      {conflict && libraryFolder && (
+        <ExportOverwriteModal
+          open
+          libraryFolder={libraryFolder}
+          initialName={conflict.name}
+          initialConflict={conflict.found}
+          saving={conflictSaving}
+          error={conflictError}
+          onClose={() => setConflict(null)}
+          onConfirm={(name, overwritePath) => void handleConfirmOverwrite(name, overwritePath)}
+        />
+      )}
     </div>
   );
 }

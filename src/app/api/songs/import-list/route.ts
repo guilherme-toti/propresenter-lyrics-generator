@@ -3,6 +3,7 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isDesktopServer } from "@/lib/desktop/envFile";
+import { listLibraryDirs } from "@/lib/propresenter/libraries";
 
 const requestSchema = z.object({
   libraryFolder: z.string().min(1),
@@ -33,17 +34,14 @@ export async function POST(request: Request) {
   }
 
   const { libraryFolder } = parsed.data;
-  const librariesParent = path.dirname(libraryFolder);
 
   try {
-    const siblingEntries = await fs.readdir(librariesParent, { withFileTypes: true });
-    const libraryDirs = siblingEntries.filter((entry) => entry.isDirectory());
+    const libraryDirs = await listLibraryDirs(libraryFolder);
 
     const files: ImportableFile[] = [];
     for (const dir of libraryDirs) {
-      const libraryPath = path.join(librariesParent, dir.name);
       try {
-        files.push(...(await listProFiles(libraryPath, dir.name)));
+        files.push(...(await listProFiles(dir.path, dir.name)));
       } catch {
         // One sibling library folder unreadable (permissions, etc.) shouldn't sink the whole listing.
       }
@@ -51,15 +49,7 @@ export async function POST(request: Request) {
     files.sort((a, b) => a.filename.localeCompare(b.filename, "pt-BR"));
     return NextResponse.json({ files });
   } catch (err) {
-    console.error("import-list: parent traversal failed, falling back to the selected library only", err);
-    try {
-      const files = (await listProFiles(libraryFolder, path.basename(libraryFolder))).sort((a, b) =>
-        a.filename.localeCompare(b.filename, "pt-BR"),
-      );
-      return NextResponse.json({ files });
-    } catch (fallbackErr) {
-      console.error("import-list: fallback to selected library also failed", fallbackErr);
-      return NextResponse.json({ error: "Não foi possível ler a pasta da Library." }, { status: 500 });
-    }
+    console.error("import-list: listing library folders failed", err);
+    return NextResponse.json({ error: "Não foi possível ler a pasta da Library." }, { status: 500 });
   }
 }

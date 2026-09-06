@@ -10,7 +10,13 @@ export async function encodeSongAsProFile(song: Song): Promise<Buffer> {
   return Buffer.from(Presentation.encode(message).finish());
 }
 
+/** Strips characters the filesystem can't take in a filename. Shared by proFileName() below and
+ * the export conflict-check/overwrite flow (see ExportOverwriteModal), which lets the user type
+ * an arbitrary name that needs the same treatment before it's checked against or written to disk. */
+export function sanitizeFileBaseName(name: string): string {
+  return name.replace(/[\\/:*?"<>|]/g, "").trim() || "Música sem título";
+}
+
 export function proFileName(song: Song): string {
-  const safe = (song.title || "Música sem título").replace(/[\\/:*?"<>|]/g, "").trim() || "Música sem título";
-  return `${safe}.pro`;
+  return `${sanitizeFileBaseName(song.title || "Música sem título")}.pro`;
 }

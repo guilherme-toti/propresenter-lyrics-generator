@@ -59,12 +59,13 @@ export interface Song {
   attributionA?: SideAttribution;
   attributionB?: SideAttribution;
   /**
-   * Set once an automatic literal AI translation has run for a side that came back blank from
-   * Musixmatch (see useAutoLiteralTranslation) — "done" drives the "Tradução literal (IA)" label
-   * in LanguageSourceCard, "skipped" (cancelled by the user, or failed) means don't auto-retry.
-   * Undefined means never attempted, i.e. still eligible to auto-start. Deliberately separate from
-   * attributionA/B, which specifically carries Musixmatch's copyright/tracking obligations and
-   * doesn't apply to AI-generated text.
+   * Set once a literal AI translation has run for a side, on the user's request via "Traduzir com
+   * IA" (see useAutoLiteralTranslation) — "done" drives the "Tradução literal" label in
+   * LanguageSourceCard, "skipped" (cancelled by the user, or failed) just means that label doesn't
+   * apply. Undefined means never attempted; a side with no official translation from Musixmatch
+   * simply stays blank until the user asks for one, rather than auto-translating. Deliberately
+   * separate from attributionA/B, which specifically carries Musixmatch's copyright/tracking
+   * obligations and doesn't apply to AI-generated text.
    */
   literalTranslationA?: "done" | "skipped";
   literalTranslationB?: "done" | "skipped";
