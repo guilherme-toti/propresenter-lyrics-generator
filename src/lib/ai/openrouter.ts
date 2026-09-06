@@ -19,6 +19,18 @@ import {
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
+/**
+ * callOpenRouter() had no timeout of its own — only the caller's own AbortSignal (wired to the
+ * UI's "Cancelar" link, when there is one) could ever cut it off. A stalled OpenRouter request
+ * (or a stalled connection to it) hung forever with the "Traduzindo…"/"Realinhando…" spinner never
+ * clearing — the one production incident this fixes was only resolved by killing the desktop
+ * app's Node sidecar process, since that severed the connection where the user hitting "Cancelar"
+ * ordinarily would. Two minutes because a full-song translation/realignment can legitimately take
+ * a while on a large model response — see musixmatch.ts's REQUEST_TIMEOUT_MS for the same pattern
+ * applied to that (much faster) API.
+ */
+const OPENROUTER_TIMEOUT_MS = 120_000;
+
 type ChurchLanguage = AiSongResponse["originalLanguage"];
 
 /**
@@ -161,6 +173,7 @@ async function callOpenRouter(
   }
   const model = modelOverride || process.env.OPENROUTER_MODEL || "openai/gpt-4o";
 
+  const timeoutSignal = AbortSignal.timeout(OPENROUTER_TIMEOUT_MS);
   const res = await fetch(OPENROUTER_URL, {
     method: "POST",
     headers: {
@@ -178,7 +191,7 @@ async function callOpenRouter(
         { role: "user", content: userPrompt },
       ],
     }),
-    signal,
+    signal: signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal,
   });
 
   if (!res.ok) {
