@@ -14,6 +14,8 @@ interface SavedInfo {
   title: string;
   playlistName: string | null;
   addedToPlaylist: boolean;
+  /** Why the playlist add failed, shown to the user. Null when it succeeded or wasn't attempted. */
+  playlistError: string | null;
 }
 
 const SAVED_MESSAGE_TIMEOUT_MS = 15_000;
@@ -45,6 +47,7 @@ export function ExportFab({ song }: { song: Song }) {
   const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
   const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
 
   useEffect(() => {
     if (!saved) return;
@@ -69,30 +72,42 @@ export function ExportFab({ song }: { song: Song }) {
     // not the requested name, so pasting into ProPresenter's search always finds the real file.
     if (typeof data.savedTo === "string") copyToClipboard(baseNameWithoutExt(data.savedTo));
 
-    // Best-effort: a selected playlist doesn't block the export if this fails (network hiccup,
-    // playlist renamed/deleted a moment ago, decode error) — the file's already safely in the
-    // Library either way, the user just falls back to dragging it in themselves.
+    // Best-effort: the file is already safely in the Library, so a failure here never fails the
+    // export — it's reported to the user instead. Needs the API port configured (Ajustes) and
+    // ProPresenter running with Network enabled; there is no file-writing fallback, because
+    // writing the playlist document behind a running ProPresenter is invisible until restart.
     let addedToPlaylist = false;
-    if (activePlaylist && playlistsFolder && typeof data.savedTo === "string") {
-      addedToPlaylist = await fetch("/api/playlists/add-item", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          playlistsFolder,
-          playlistId: activePlaylist.id,
-          presentationPath: data.savedTo,
-          name: overrides?.fileName || song.title || "Música sem título",
-        }),
-      })
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => Boolean(d?.added))
-        .catch(() => false);
+    let playlistError: string | null = null;
+    const exportedName = typeof data.savedTo === "string" ? baseNameWithoutExt(data.savedTo) : null;
+
+    if (activePlaylist && exportedName) {
+      if (!proApiPort) {
+        playlistError = "Configure a porta do ProPresenter em Ajustes para adicionar automaticamente.";
+      } else {
+        try {
+          const res = await fetch("/api/playlists/add-item", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              port: proApiPort,
+              playlistId: activePlaylist.id,
+              presentationName: exportedName,
+            }),
+          });
+          const result = await res.json();
+          addedToPlaylist = Boolean(result?.added);
+          if (!addedToPlaylist) playlistError = result?.reason ?? "Falha ao adicionar à playlist.";
+        } catch {
+          playlistError = "Falha ao adicionar à playlist.";
+        }
+      }
     }
 
     setSaved({
       title: overrides?.fileName || song.title || "sua música",
       playlistName: activePlaylist?.name ?? null,
       addedToPlaylist,
+      playlistError,
     });
   };
 
@@ -213,6 +228,11 @@ export function ExportFab({ song }: { song: Song }) {
               </>
             )}
           </p>
+          {saved.playlistError && (
+            <p className="mt-1 flex-1 text-red-600">
+              Falha ao adicionar à playlist: {saved.playlistError}
+            </p>
+          )}
           <button
             onClick={() => setSaved(null)}
             aria-label="Fechar aviso"
