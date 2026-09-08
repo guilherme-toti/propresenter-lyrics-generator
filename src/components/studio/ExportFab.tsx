@@ -96,7 +96,7 @@ export function ExportFab({ song }: { song: Song }) {
           });
           const result = await res.json();
           addedToPlaylist = Boolean(result?.added);
-          if (!addedToPlaylist) playlistError = result?.reason ?? "Falha ao adicionar à playlist.";
+          if (!addedToPlaylist) playlistError = result?.reason || "Falha ao adicionar à playlist.";
         } catch {
           playlistError = "Falha ao adicionar à playlist.";
         }
@@ -206,33 +206,35 @@ export function ExportFab({ song }: { song: Song }) {
       )}
       {saved && (
         <div className="flex w-full max-w-sm items-start gap-2 rounded-lg border border-line bg-white px-3 py-2.5 text-xs text-ink shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
-          <p className="flex-1">
-            Música importada com sucesso!
-            {saved.addedToPlaylist && saved.playlistName ? (
-              <>
-                <br />
-                Adicionada à playlist <strong>{saved.playlistName}</strong>.
-              </>
-            ) : (
-              <>
-                <br />
-                Procure por <strong>{saved.title}</strong> no ProPresenter
-                {saved.playlistName ? (
-                  <>
-                    {" "}
-                    e arraste para a playlist <strong>{saved.playlistName}</strong>.
-                  </>
-                ) : (
-                  "."
-                )}
-              </>
-            )}
-          </p>
-          {saved.playlistError && (
-            <p className="mt-1 flex-1 text-red-600">
-              Falha ao adicionar à playlist: {saved.playlistError}
+          <div className="flex-1">
+            <p>
+              Música importada com sucesso!
+              {saved.addedToPlaylist && saved.playlistName ? (
+                <>
+                  <br />
+                  Adicionada à playlist <strong>{saved.playlistName}</strong>.
+                </>
+              ) : (
+                <>
+                  <br />
+                  Procure por <strong>{saved.title}</strong> no ProPresenter
+                  {saved.playlistName ? (
+                    <>
+                      {" "}
+                      e arraste para a playlist <strong>{saved.playlistName}</strong>.
+                    </>
+                  ) : (
+                    "."
+                  )}
+                </>
+              )}
             </p>
-          )}
+            {saved.playlistError && (
+              <p className="mt-1 text-red-600">
+                Falha ao adicionar à playlist: {saved.playlistError}
+              </p>
+            )}
+          </div>
           <button
             onClick={() => setSaved(null)}
             aria-label="Fechar aviso"
