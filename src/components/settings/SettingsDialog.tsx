@@ -27,7 +27,7 @@ function FolderRow({
 }) {
   return (
     <section>
-      <h3 className="mb-1 text-sm font-semibold text-ink">{label}</h3>
+      <h4 className="mb-1 text-sm font-semibold text-ink">{label}</h4>
       <p className="mb-2 text-xs text-ink/60">{description}</p>
       <div className="flex items-center gap-2">
         <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
@@ -85,7 +85,7 @@ function ProApiPortRow() {
 
   return (
     <section>
-      <h3 className="mb-1 text-sm font-semibold text-ink">Porta do ProPresenter</h3>
+      <h4 className="mb-1 text-sm font-semibold text-ink">Porta do ProPresenter</h4>
       <p className="mb-2 text-xs text-ink/60">
         Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem isso, a música
         é exportada para a Library mas não entra na playlist automaticamente.
@@ -111,6 +111,28 @@ function ProApiPortRow() {
           </p>
         )
       )}
+    </section>
+  );
+}
+
+function PlaylistRow({ onPick }: { onPick: () => void }) {
+  const activePlaylist = useDesktopStore((s) => s.activePlaylist);
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
+
+  return (
+    <section>
+      <h4 className="mb-1 text-sm font-semibold text-ink">Playlist de destino</h4>
+      <p className="mb-2 text-xs text-ink/60">
+        Playlist onde a música exportada é adicionada automaticamente (requer a porta do ProPresenter configurada).
+      </p>
+      <div className="flex items-center gap-2">
+        <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
+          {activePlaylist?.name ?? "Nenhuma selecionada"}
+        </span>
+        <Button variant="secondary" size="sm" disabled={!proApiPort} onClick={onPick}>
+          Trocar
+        </Button>
+      </div>
     </section>
   );
 }
@@ -200,7 +222,7 @@ function ApiKeyRow({
 
   return (
     <section>
-      <h3 className="mb-1 text-sm font-semibold text-ink">{title}</h3>
+      <h4 className="mb-1 text-sm font-semibold text-ink">{title}</h4>
       <p className="mb-2 text-xs text-ink/60">{description}</p>
       {editing ? (
         <div className="flex flex-col gap-2">
@@ -239,7 +261,6 @@ function ApiKeyRow({
 export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
   const libraryFolder = useDesktopStore((s) => s.libraryFolder);
   const proApiPort = useDesktopStore((s) => s.proApiPort);
-  const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setLibraryFolder = useDesktopStore((s) => s.setLibraryFolder);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -253,45 +274,43 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
     <>
       <Modal open={isOpen} onClose={onClose} title="Ajustes">
         <div className="flex flex-col gap-5">
-          <ApiKeyRow
-            isOpen={isOpen}
-            endpoint="/api/settings/api-key"
-            title="Chave da OpenRouter"
-            description={
-              'Usada pelo "Gerar com IA". Fica salva só neste computador — nunca é exibida por completo depois de salva.'
-            }
-            placeholder="sk-..."
-          />
+          <section>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Chaves de API</h3>
+            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <ApiKeyRow
+                isOpen={isOpen}
+                endpoint="/api/settings/api-key"
+                title="Chave da OpenRouter"
+                description={
+                  'Usada pelo "Gerar com IA". Fica salva só neste computador — nunca é exibida por completo depois de salva.'
+                }
+                placeholder="sk-..."
+              />
 
-          <ApiKeyRow
-            isOpen={isOpen}
-            endpoint="/api/settings/musixmatch-api-key"
-            title="Chave da Musixmatch"
-            description="Usada pra buscar a letra oficial no catálogo. Fica salva só neste computador — nunca é exibida por completo depois de salva."
-            placeholder="Cole a chave da Musixmatch"
-          />
-
-          <FolderRow
-            label="Pasta da Library"
-            description="Onde os arquivos .pro exportados são salvos. O ProPresenter já lê essa pasta nativamente."
-            value={libraryFolder}
-            onPick={pickLibraryFolder}
-          />
-
-          <ProApiPortRow />
+              <ApiKeyRow
+                isOpen={isOpen}
+                endpoint="/api/settings/musixmatch-api-key"
+                title="Chave da Musixmatch"
+                description="Usada pra buscar a letra oficial no catálogo. Fica salva só neste computador — nunca é exibida por completo depois de salva."
+                placeholder="Cole a chave da Musixmatch"
+              />
+            </div>
+          </section>
 
           <section>
-            <h3 className="mb-1 text-sm font-semibold text-ink">Playlist de destino</h3>
-            <p className="mb-2 text-xs text-ink/60">
-              Playlist onde a música exportada é adicionada automaticamente (requer a porta do ProPresenter configurada).
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
-                {activePlaylist?.name ?? "Nenhuma selecionada"}
-              </span>
-              <Button variant="secondary" size="sm" disabled={!proApiPort} onClick={() => setPickerOpen(true)}>
-                Trocar
-              </Button>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">ProPresenter</h3>
+            <div className="mt-3 flex flex-col gap-4">
+              <FolderRow
+                label="Pasta da Library"
+                description="Onde os arquivos .pro exportados são salvos. O ProPresenter já lê essa pasta nativamente."
+                value={libraryFolder}
+                onPick={pickLibraryFolder}
+              />
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ProApiPortRow />
+                <PlaylistRow onPick={() => setPickerOpen(true)} />
+              </div>
             </div>
           </section>
         </div>

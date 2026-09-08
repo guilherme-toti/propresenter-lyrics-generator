@@ -58,7 +58,7 @@ export function PlaylistPickerModal({
         )}
         {port && loading && <p className="text-sm text-ink/60">Procurando playlists…</p>}
         {port && !loading && playlists.length === 0 && (
-          <p className="text-sm text-ink/60">Nenhuma playlist encontrada nessa pasta.</p>
+          <p className="text-sm text-ink/60">Nenhuma playlist encontrada no ProPresenter.</p>
         )}
         <ul className="flex flex-col gap-1.5">
           {playlists.map((playlist) => (
