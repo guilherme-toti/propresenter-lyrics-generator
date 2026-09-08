@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import protobuf from "protobufjs";
 
 let rootPromise: Promise<protobuf.Root> | null = null;
@@ -102,98 +101,4 @@ export async function scanPlaylistFolder(folder: string): Promise<PlaylistSummar
     }
   }
   return results;
-}
-
-const NIL_UUID = "00000000-0000-0000-0000-000000000000";
-
-/** Same leaf-vs-group distinction as collectPlaylists above, but returns the matching node itself
- * (to mutate) instead of collecting summaries. */
-function findLeafNode(node: PlaylistNode, id: string): PlaylistNode | null {
-  const children = node.playlists?.playlists;
-  if (children) {
-    for (const child of children) {
-      const found = findLeafNode(child, id);
-      if (found) return found;
-    }
-    return null;
-  }
-  return node.uuid?.string === id ? node : null;
-}
-
-/**
- * Adds a presentation item pointing at `presentation.absolutePath` to whichever playlist in
- * `folder` has `playlistId` as its UUID — the same effect as dragging the exported .pro file onto
- * that playlist in ProPresenter's own sidebar, done from disk instead. Returns false (not an
- * error) if no playlist with that id is found in any file in the folder, e.g. it was deleted or
- * renamed to a different document since it was picked.
- *
- * Mutates the decoded PlaylistDocument message in place and re-encodes the same message, rather
- * than round-tripping the whole document through toObject()/fromObject(): this schema has several
- * `oneof`s this feature has no reason to touch (smart_directory vs. pco_plan, playlists vs. items),
- * and toObject({defaults: true}) — needed to reliably tell a real playlist apart from a group, see
- * collectPlaylists — would materialize every alternative of every oneof in the entire document
- * with a zero-value message, which fromObject() would then write back as if all of them were
- * actually present. Decoding once, changing only the target node's item list, and re-encoding the
- * same object graph leaves every other byte of the file exactly as it was decoded.
- *
- * This is inherently best-effort: if ProPresenter has this exact file open and later saves its own
- * in-memory copy, that save can overwrite what's written here. There's no way to detect or avoid
- * that from outside the app — this is a known, accepted risk of writing into a live document (see
- * the README's "Why the export doesn't write directly into the playlist" note), not an oversight.
- */
-export async function addPresentationToPlaylist(
-  folder: string,
-  playlistId: string,
-  presentation: { name: string; absolutePath: string },
-): Promise<boolean> {
-  const root = await loadRoot();
-  const PlaylistDocumentType = root.lookupType("rv.data.PlaylistDocument");
-
-  let entries: string[];
-  try {
-    entries = await fs.readdir(folder);
-  } catch {
-    return false;
-  }
-
-  const newItem = {
-    uuid: { string: crypto.randomUUID() },
-    name: presentation.name,
-    presentation: {
-      documentPath: {
-        platform: process.platform === "win32" ? "PLATFORM_WIN32" : "PLATFORM_MACOS",
-        absoluteString: pathToFileURL(presentation.absolutePath).href,
-      },
-      arrangement: { string: NIL_UUID },
-    },
-  };
-
-  for (const entry of entries) {
-    const fullPath = path.join(folder, entry);
-    try {
-      const stat = await fs.stat(fullPath);
-      if (!stat.isFile()) continue;
-
-      const bytes = await fs.readFile(fullPath);
-      const message = PlaylistDocumentType.decode(bytes);
-      const view = message as unknown as PlaylistDocument;
-      if (view.type !== DOC_TYPE_PRESENTATION || !view.rootNode) continue;
-
-      let target: PlaylistNode | null = null;
-      for (const child of view.rootNode.playlists?.playlists ?? []) {
-        target = findLeafNode(child, playlistId);
-        if (target) break;
-      }
-      if (!target) continue;
-
-      target.items = { items: [...(target.items?.items ?? []), newItem] };
-
-      const encoded = Buffer.from(PlaylistDocumentType.encode(message).finish());
-      await fs.writeFile(fullPath, encoded);
-      return true;
-    } catch {
-      continue;
-    }
-  }
-  return false;
 }
