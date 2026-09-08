@@ -80,3 +80,106 @@ export function presentationItem(
 export function namesMatch(a: string, b: string): boolean {
   return a.normalize("NFC") === b.normalize("NFC");
 }
+
+/** Loopback only: ProPresenter runs on the same machine as this app. */
+function baseUrl(port: number): string {
+  return `http://127.0.0.1:${port}`;
+}
+
+const REQUEST_TIMEOUT_MS = 5_000;
+/** ProPresenter indexed a freshly written .pro in ~4s during testing; 15s is headroom. */
+const INDEX_TIMEOUT_MS = 15_000;
+const INDEX_POLL_INTERVAL_MS = 500;
+
+async function apiRequest(port: number, path: string, init?: RequestInit): Promise<Response> {
+  let res: Response;
+  try {
+    res = await fetch(`${baseUrl(port)}${path}`, {
+      ...init,
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+  } catch {
+    throw new Error(
+      "Não foi possível falar com o ProPresenter. Verifique se ele está aberto e se a rede está ativada nas preferências.",
+    );
+  }
+  if (!res.ok) {
+    throw new Error(`O ProPresenter respondeu ${res.status} em ${path}.`);
+  }
+  return res;
+}
+
+/** Backs the "Testar conexão" button — `/version` is the cheapest proof of life. */
+export async function pingProPresenter(
+  port: number,
+): Promise<{ name: string; hostDescription: string }> {
+  const res = await apiRequest(port, "/version");
+  const data = (await res.json()) as { name?: string; host_description?: string };
+  return {
+    name: data.name ?? "desconhecido",
+    hostDescription: data.host_description ?? "ProPresenter",
+  };
+}
+
+/**
+ * Finds a just-exported presentation's UUID by the name it has in a library, polling
+ * because ProPresenter indexes a newly written .pro asynchronously — about 4 seconds
+ * in testing. Returns null if it never shows up within INDEX_TIMEOUT_MS.
+ *
+ * `name` is the exported filename without its .pro extension, which is exactly what
+ * ProPresenter uses as the library item's name.
+ */
+export async function findLibraryPresentation(port: number, name: string): Promise<string | null> {
+  const deadline = Date.now() + INDEX_TIMEOUT_MS;
+
+  do {
+    const librariesRes = await apiRequest(port, "/v1/libraries");
+    const libraries = (await librariesRes.json()) as Array<{ uuid: string }>;
+
+    for (const library of libraries) {
+      const itemsRes = await apiRequest(port, `/v1/library/${library.uuid}`);
+      const body = (await itemsRes.json()) as { items?: Array<{ uuid: string; name: string }> };
+      const match = body.items?.find((item) => namesMatch(item.name, name));
+      if (match) return match.uuid;
+    }
+
+    if (Date.now() >= deadline) break;
+    await new Promise((resolve) => setTimeout(resolve, INDEX_POLL_INTERVAL_MS));
+  } while (Date.now() < deadline);
+
+  return null;
+}
+
+/**
+ * Appends a presentation to a playlist.
+ *
+ * `PUT /v1/playlist/{id}` *sets* the playlist's contents — there is no append
+ * endpoint — so this reads the current items, maps them into PUT shape, adds ours,
+ * and writes the whole array back. Two consequences worth knowing:
+ *
+ *  - ProPresenter mints new `id.uuid` values for every item on each write. Names,
+ *    types, header colours and presentation targets survive; item identities do not.
+ *  - A playlist edit made in ProPresenter between the GET and the PUT is lost. The
+ *    window is milliseconds and the same person drives both apps, so this is accepted.
+ */
+export async function appendToPlaylist(
+  port: number,
+  playlistId: string,
+  presentationUuid: string,
+  name: string,
+): Promise<void> {
+  const res = await apiRequest(port, `/v1/playlist/${playlistId}`);
+  const playlist = (await res.json()) as { items?: PlaylistApiItem[] };
+  const existing = playlist.items ?? [];
+
+  const body = [
+    ...existing.map((item, index) => toPutItem(item, index)),
+    presentationItem(presentationUuid, name, existing.length),
+  ];
+
+  await apiRequest(port, `/v1/playlist/${playlistId}`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
