@@ -81,7 +81,8 @@ const show = (label, tracks) => {
   if (tracks.length === 0) return console.log("(nenhum resultado)");
   tracks.forEach((t, i) =>
     console.log(
-      `${i + 1}. "${t.track_name}" — ${t.artist_name}  [id=${t.commontrack_id}, idioma=${t.lyrics_language || "?"}]`,
+      `${i + 1}. "${t.track_name}" — ${t.artist_name}  [id=${t.commontrack_id}, idioma=${t.lyrics_language || "?"}, ` +
+        `track_rating=${t.track_rating ?? "?"}, artist_rating=${t.artist_rating ?? "?"}, num_favourite=${t.num_favourite ?? "?"}]`,
     ),
   );
 };
