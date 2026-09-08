@@ -3,7 +3,7 @@ import { z } from "zod";
 import { isDesktopServer } from "@/lib/desktop/envFile";
 import { pingProPresenter } from "@/lib/propresenter/api";
 
-const bodySchema = z.object({ port: z.number().int().positive() });
+const bodySchema = z.object({ port: z.number().int().min(1).max(65535) });
 
 /** Desktop-only: backs the "Testar conexão" button in Ajustes. A failed connection is a
  * reportable result, not a request error, so it comes back 200 with ok:false. */

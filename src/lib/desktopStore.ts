@@ -20,7 +20,7 @@ const persistedDesktopStateSchema = z.object({
   playlistsBaselined: z.boolean().optional(),
   activePlaylist: playlistRefSchema.nullable().optional(),
   knownPlaylistIds: z.array(z.string()).optional(),
-  proApiPort: z.number().int().positive().nullable().optional(),
+  proApiPort: z.number().int().min(1).max(65535).nullable().optional(),
 });
 
 interface DesktopState {

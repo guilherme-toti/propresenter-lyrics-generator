@@ -6,6 +6,7 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { useDesktopStore } from "@/lib/desktopStore";
+import { parsePort } from "@/lib/desktop/parsePort";
 import { PlaylistPickerModal } from "./PlaylistPickerModal";
 
 interface SettingsDialogProps {
@@ -50,13 +51,14 @@ function ProApiPortRow() {
   const save = (raw: string) => {
     setValue(raw);
     setResult(null);
-    const port = Number.parseInt(raw, 10);
-    setProApiPort(Number.isInteger(port) && port > 0 ? port : null);
+    setProApiPort(parsePort(raw));
   };
 
+  const invalidInput = value.trim() !== "" && parsePort(value) === null;
+
   const test = async () => {
-    const port = Number.parseInt(value, 10);
-    if (!Number.isInteger(port) || port <= 0) {
+    const port = parsePort(value);
+    if (port === null) {
       setResult({ ok: false, message: "Informe uma porta válida." });
       return;
     }
@@ -100,10 +102,14 @@ function ProApiPortRow() {
           {testing ? "Testando…" : "Testar conexão"}
         </Button>
       </div>
-      {result && (
-        <p className={`mt-2 text-xs ${result.ok ? "text-ink/60" : "text-red-600"}`}>
-          {result.message}
-        </p>
+      {invalidInput ? (
+        <p className="mt-2 text-xs text-red-600">Porta inválida. Use um número entre 1 e 65535.</p>
+      ) : (
+        result && (
+          <p className={`mt-2 text-xs ${result.ok ? "text-ink/60" : "text-red-600"}`}>
+            {result.message}
+          </p>
+        )
       )}
     </section>
   );
