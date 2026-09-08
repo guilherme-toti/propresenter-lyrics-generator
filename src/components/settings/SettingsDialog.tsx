@@ -40,6 +40,75 @@ function FolderRow({
   );
 }
 
+function ProApiPortRow() {
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
+  const setProApiPort = useDesktopStore((s) => s.setProApiPort);
+  const [value, setValue] = useState(proApiPort ? String(proApiPort) : "");
+  const [testing, setTesting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; message: string } | null>(null);
+
+  const save = (raw: string) => {
+    setValue(raw);
+    setResult(null);
+    const port = Number.parseInt(raw, 10);
+    setProApiPort(Number.isInteger(port) && port > 0 ? port : null);
+  };
+
+  const test = async () => {
+    const port = Number.parseInt(value, 10);
+    if (!Number.isInteger(port) || port <= 0) {
+      setResult({ ok: false, message: "Informe uma porta válida." });
+      return;
+    }
+    setTesting(true);
+    setResult(null);
+    try {
+      const res = await fetch("/api/propresenter/ping", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ port }),
+      });
+      const data = await res.json();
+      setResult(
+        data.ok
+          ? { ok: true, message: `Conectado: ${data.hostDescription} em ${data.name}` }
+          : { ok: false, message: data.error ?? "Falha ao conectar." },
+      );
+    } catch {
+      setResult({ ok: false, message: "Falha ao conectar." });
+    } finally {
+      setTesting(false);
+    }
+  };
+
+  return (
+    <section>
+      <h3 className="mb-1 text-sm font-semibold text-ink">Porta do ProPresenter</h3>
+      <p className="mb-2 text-xs text-ink/60">
+        Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem isso, a música
+        é exportada para a Library mas não entra na playlist automaticamente.
+      </p>
+      <div className="flex items-center gap-2">
+        <Input
+          className="flex-1"
+          inputMode="numeric"
+          placeholder="ex.: 62830"
+          value={value}
+          onChange={(e) => save(e.target.value)}
+        />
+        <Button variant="secondary" size="sm" onClick={test} disabled={testing}>
+          {testing ? "Testando…" : "Testar conexão"}
+        </Button>
+      </div>
+      {result && (
+        <p className={`mt-2 text-xs ${result.ok ? "text-ink/60" : "text-red-600"}`}>
+          {result.message}
+        </p>
+      )}
+    </section>
+  );
+}
+
 /**
  * The key is never sent to this component in full after the initial paste —
  * the API only ever returns a masked form (see the /api/settings/*-api-key
@@ -215,6 +284,8 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
             value={playlistsFolder}
             onPick={pickPlaylistsFolder}
           />
+
+          <ProApiPortRow />
 
           <section>
             <h3 className="mb-1 text-sm font-semibold text-ink">Playlist de destino</h3>

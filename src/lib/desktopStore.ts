@@ -20,6 +20,7 @@ const persistedDesktopStateSchema = z.object({
   playlistsBaselined: z.boolean().optional(),
   activePlaylist: playlistRefSchema.nullable().optional(),
   knownPlaylistIds: z.array(z.string()).optional(),
+  proApiPort: z.number().int().positive().nullable().optional(),
 });
 
 interface DesktopState {
@@ -27,6 +28,8 @@ interface DesktopState {
   libraryFolder: string | null;
   /** ProPresenter Playlists folder — watched to detect newly created playlists. */
   playlistsFolder: string | null;
+  /** Port of ProPresenter's local HTTP API (Preferences → Network). Per-install. */
+  proApiPort: number | null;
   /**
    * False right after (re)configuring playlistsFolder, until the first scan
    * completes. That first scan adopts everything it finds as the known
@@ -39,6 +42,7 @@ interface DesktopState {
 
   setLibraryFolder: (folder: string | null) => void;
   setPlaylistsFolder: (folder: string | null) => void;
+  setProApiPort: (port: number | null) => void;
   setActivePlaylist: (playlist: PlaylistRef | null) => void;
   rememberKnownPlaylists: (ids: string[]) => void;
   markPlaylistsBaselined: () => void;
@@ -49,6 +53,7 @@ export const useDesktopStore = create<DesktopState>()(
     (set) => ({
       libraryFolder: null,
       playlistsFolder: null,
+      proApiPort: null,
       playlistsBaselined: false,
       activePlaylist: null,
       knownPlaylistIds: [],
@@ -57,6 +62,8 @@ export const useDesktopStore = create<DesktopState>()(
 
       setPlaylistsFolder: (folder) =>
         set({ playlistsFolder: folder, playlistsBaselined: false, knownPlaylistIds: [] }),
+
+      setProApiPort: (port) => set({ proApiPort: port }),
 
       setActivePlaylist: (playlist) => set({ activePlaylist: playlist }),
 
