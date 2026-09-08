@@ -137,6 +137,7 @@ export async function findLibraryPresentation(port: number, name: string): Promi
     const libraries = (await librariesRes.json()) as Array<{ uuid: string }>;
 
     for (const library of libraries) {
+      if (Date.now() >= deadline) return null;
       const itemsRes = await apiRequest(port, `/v1/library/${library.uuid}`);
       const body = (await itemsRes.json()) as { items?: Array<{ uuid: string; name: string }> };
       const match = body.items?.find((item) => namesMatch(item.name, name));
