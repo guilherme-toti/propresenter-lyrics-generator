@@ -81,6 +81,36 @@ export function namesMatch(a: string, b: string): boolean {
   return a.normalize("NFC") === b.normalize("NFC");
 }
 
+/** One node of `GET /v1/playlists`, which returns a tree: playlist groups carry nested children. */
+export interface PlaylistTreeNode {
+  id: { uuid: string; name: string; index: number };
+  field_type?: string;
+  children?: PlaylistTreeNode[];
+}
+
+export interface PlaylistRef {
+  id: string;
+  name: string;
+}
+
+/**
+ * Walks the tree `GET /v1/playlists` returns, collecting every leaf playlist a user could
+ * pick as an export destination. This is the same leaf-vs-group distinction the deleted
+ * protobuf scanner (`playlist.ts`, gone as of this change) had to infer from which side of
+ * a `oneof` was populated on a file it decoded by hand — here the API just says so via
+ * `field_type`, so no inference is needed. Groups are never selectable, only recursed into.
+ */
+export function flattenPlaylists(nodes: PlaylistTreeNode[]): PlaylistRef[] {
+  const out: PlaylistRef[] = [];
+  for (const node of nodes) {
+    if (node.field_type === "playlist" && node.id?.uuid && node.id?.name) {
+      out.push({ id: node.id.uuid, name: node.id.name });
+    }
+    if (node.children) out.push(...flattenPlaylists(node.children));
+  }
+  return out;
+}
+
 /** Loopback only: ProPresenter runs on the same machine as this app. */
 function baseUrl(port: number): string {
   return `http://127.0.0.1:${port}`;
@@ -208,4 +238,12 @@ export async function appendToPlaylist(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** Backs playlist discovery: the flat list of playlists a user could export into, read
+ * straight from ProPresenter's own in-memory state instead of decoding its playlist files
+ * (which ProPresenter never re-reads while running — see the module doc comment). */
+export async function listPlaylists(port: number): Promise<PlaylistRef[]> {
+  const tree = await apiJson<PlaylistTreeNode[]>(port, "/v1/playlists");
+  return flattenPlaylists(tree);
 }

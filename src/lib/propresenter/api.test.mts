@@ -1,6 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { namesMatch, presentationItem, toPutItem, type PlaylistApiItem } from "./api.ts";
+import {
+  flattenPlaylists,
+  namesMatch,
+  presentationItem,
+  toPutItem,
+  type PlaylistApiItem,
+  type PlaylistTreeNode,
+} from "./api.ts";
 
 const header: PlaylistApiItem = {
   id: { uuid: "1E546E96-F193-4344-8BE1-FF07E3029354", name: "Music", index: 1 },
@@ -93,4 +100,89 @@ test("matches library names across macOS NFD and JavaScript NFC forms", () => {
 
 test("does not match genuinely different names", () => {
   assert.equal(namesMatch("É Ele (3)", "É Ele (2)"), false);
+});
+
+test("flattens a real two-playlist response with no groups", () => {
+  // Real observed response from GET /v1/playlists.
+  const tree: PlaylistTreeNode[] = [
+    {
+      id: { uuid: "0CF150E4-389D-41A2-BE19-0031C222D76A", name: "WORSHIP HOJE", index: 0 },
+      field_type: "playlist",
+      children: [],
+    },
+    {
+      id: { uuid: "07F7CA0F-7DC8-459F-BDDE-B5DC6800E9A3", name: "SEP 2", index: 1 },
+      field_type: "playlist",
+      children: [],
+    },
+  ];
+
+  assert.deepEqual(flattenPlaylists(tree), [
+    { id: "0CF150E4-389D-41A2-BE19-0031C222D76A", name: "WORSHIP HOJE" },
+    { id: "07F7CA0F-7DC8-459F-BDDE-B5DC6800E9A3", name: "SEP 2" },
+  ]);
+});
+
+test("descends into a group's children to find its playlists", () => {
+  const tree: PlaylistTreeNode[] = [
+    {
+      id: { uuid: "GROUP-1", name: "Domingo", index: 0 },
+      field_type: "group",
+      children: [
+        { id: { uuid: "P1", name: "Manhã", index: 0 }, field_type: "playlist", children: [] },
+        { id: { uuid: "P2", name: "Noite", index: 1 }, field_type: "playlist", children: [] },
+      ],
+    },
+  ];
+
+  assert.deepEqual(flattenPlaylists(tree), [
+    { id: "P1", name: "Manhã" },
+    { id: "P2", name: "Noite" },
+  ]);
+});
+
+test("descends through nested groups", () => {
+  const tree: PlaylistTreeNode[] = [
+    {
+      id: { uuid: "OUTER", name: "2026", index: 0 },
+      field_type: "group",
+      children: [
+        {
+          id: { uuid: "INNER", name: "Setembro", index: 0 },
+          field_type: "group",
+          children: [{ id: { uuid: "P1", name: "SEP 2", index: 0 }, field_type: "playlist", children: [] }],
+        },
+      ],
+    },
+  ];
+
+  assert.deepEqual(flattenPlaylists(tree), [{ id: "P1", name: "SEP 2" }]);
+});
+
+test("does not collect a group node itself as a playlist", () => {
+  const tree: PlaylistTreeNode[] = [
+    {
+      id: { uuid: "GROUP-1", name: "Domingo", index: 0 },
+      field_type: "group",
+      children: [],
+    },
+  ];
+
+  assert.deepEqual(flattenPlaylists(tree), []);
+});
+
+test("returns an empty array for an empty tree", () => {
+  assert.deepEqual(flattenPlaylists([]), []);
+});
+
+test("skips a node missing a name", () => {
+  const tree: PlaylistTreeNode[] = [
+    {
+      id: { uuid: "P1", name: "", index: 0 },
+      field_type: "playlist",
+      children: [],
+    },
+  ];
+
+  assert.deepEqual(flattenPlaylists(tree), []);
 });
