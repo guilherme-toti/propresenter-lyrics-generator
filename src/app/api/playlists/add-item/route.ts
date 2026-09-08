@@ -4,7 +4,7 @@ import { isDesktopServer } from "@/lib/desktop/envFile";
 import { appendToPlaylist, findLibraryPresentation } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
-  port: z.number().int().positive(),
+  port: z.number().int().min(1).max(65535),
   playlistId: z.string().min(1),
   /** The exported filename without ".pro" — what ProPresenter names the library item. */
   presentationName: z.string().min(1),

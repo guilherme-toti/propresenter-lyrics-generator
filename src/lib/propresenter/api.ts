@@ -104,17 +104,32 @@ async function apiRequest(port: number, path: string, init?: RequestInit): Promi
     );
   }
   if (!res.ok) {
-    throw new Error(`O ProPresenter respondeu ${res.status} em ${path}.`);
+    // ProPresenter puts its deserializer's complaint in the body, and those messages are the only
+    // documentation of where its OpenAPI spec is wrong. Keep it: without it a future version
+    // tightening its PUT surfaces as a bare "respondeu 400" with the reason discarded.
+    const detail = await res.text().catch(() => "");
+    const suffix = detail ? ` ${detail.slice(0, 200)}` : "";
+    throw new Error(`O ProPresenter respondeu ${res.status} em ${path}.${suffix}`);
   }
   return res;
+}
+
+/** apiRequest + JSON parse. Kept together so a malformed body throws the same Portuguese error
+ * shape as every other failure — callers surface `err.message` directly to the user. */
+async function apiJson<T>(port: number, path: string, init?: RequestInit): Promise<T> {
+  const res = await apiRequest(port, path, init);
+  try {
+    return (await res.json()) as T;
+  } catch {
+    throw new Error(`O ProPresenter devolveu uma resposta inválida em ${path}.`);
+  }
 }
 
 /** Backs the "Testar conexão" button — `/version` is the cheapest proof of life. */
 export async function pingProPresenter(
   port: number,
 ): Promise<{ name: string; hostDescription: string }> {
-  const res = await apiRequest(port, "/version");
-  const data = (await res.json()) as { name?: string; host_description?: string };
+  const data = await apiJson<{ name?: string; host_description?: string }>(port, "/version");
   return {
     name: data.name ?? "desconhecido",
     hostDescription: data.host_description ?? "ProPresenter",
@@ -133,13 +148,14 @@ export async function findLibraryPresentation(port: number, name: string): Promi
   const deadline = Date.now() + INDEX_TIMEOUT_MS;
 
   do {
-    const librariesRes = await apiRequest(port, "/v1/libraries");
-    const libraries = (await librariesRes.json()) as Array<{ uuid: string }>;
+    const libraries = await apiJson<Array<{ uuid: string }>>(port, "/v1/libraries");
 
     for (const library of libraries) {
       if (Date.now() >= deadline) return null;
-      const itemsRes = await apiRequest(port, `/v1/library/${library.uuid}`);
-      const body = (await itemsRes.json()) as { items?: Array<{ uuid: string; name: string }> };
+      const body = await apiJson<{ items?: Array<{ uuid: string; name: string }> }>(
+        port,
+        `/v1/library/${encodeURIComponent(library.uuid)}`,
+      );
       const match = body.items?.find((item) => namesMatch(item.name, name));
       if (match) return match.uuid;
     }
@@ -169,16 +185,25 @@ export async function appendToPlaylist(
   presentationUuid: string,
   name: string,
 ): Promise<void> {
-  const res = await apiRequest(port, `/v1/playlist/${playlistId}`);
-  const playlist = (await res.json()) as { items?: PlaylistApiItem[] };
+  const encodedPlaylistId = encodeURIComponent(playlistId);
+  const playlist = await apiJson<{ items?: PlaylistApiItem[] }>(
+    port,
+    `/v1/playlist/${encodedPlaylistId}`,
+  );
   const existing = playlist.items ?? [];
+
+  // The overwrite flow (ExportOverwriteModal -> exportToLibrary) re-runs the whole export for a
+  // song that is already in the playlist. Appending again would leave a duplicate in the playlist
+  // the user is about to present from, and rewrite every item's uuid to do it. Already there is
+  // the outcome the caller wanted, so this is success, not a no-op worth reporting.
+  if (existing.some((item) => item.presentation_info?.presentation_uuid === presentationUuid)) return;
 
   const body = [
     ...existing.map((item, index) => toPutItem(item, index)),
     presentationItem(presentationUuid, name, existing.length),
   ];
 
-  await apiRequest(port, `/v1/playlist/${playlistId}`, {
+  await apiRequest(port, `/v1/playlist/${encodedPlaylistId}`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),

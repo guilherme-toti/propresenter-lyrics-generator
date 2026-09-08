@@ -279,7 +279,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
 
           <FolderRow
             label="Pasta da Library"
-            description="Onde os arquivos .pro exportados são salvos. O ProPresenter já lê essa pasta nativamente — depois é só arrastar para a playlist desejada."
+            description="Onde os arquivos .pro exportados são salvos. O ProPresenter já lê essa pasta nativamente."
             value={libraryFolder}
             onPick={pickLibraryFolder}
           />
@@ -296,7 +296,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
           <section>
             <h3 className="mb-1 text-sm font-semibold text-ink">Playlist de destino</h3>
             <p className="mb-2 text-xs text-ink/60">
-              Só um lembrete visual de para onde arrastar o arquivo exportado — não afeta onde ele é salvo.
+              Playlist onde a música exportada é adicionada automaticamente (requer a porta do ProPresenter configurada).
             </p>
             <div className="flex items-center gap-2">
               <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
