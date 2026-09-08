@@ -44,7 +44,6 @@ export function ExportFab({ song }: { song: Song }) {
   const canExport = song.alignment.length > 0;
 
   const libraryFolder = useDesktopStore((s) => s.libraryFolder);
-  const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
   const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   const proApiPort = useDesktopStore((s) => s.proApiPort);
@@ -143,8 +142,8 @@ export function ExportFab({ song }: { song: Song }) {
     setSaved(null);
     try {
       if (isDesktopApp() && libraryFolder) {
-        if (activePlaylist && playlistsFolder) {
-          const stillThere = await playlistStillExists(playlistsFolder, activePlaylist.id);
+        if (activePlaylist && proApiPort) {
+          const stillThere = await playlistStillExists(proApiPort, activePlaylist.id);
           if (!stillThere) {
             setActivePlaylist(null);
             setStatus("idle");
@@ -255,7 +254,7 @@ export function ExportFab({ song }: { song: Song }) {
       </button>
       <PlaylistPickerModal
         open={pickerOpen}
-        folder={playlistsFolder}
+        port={proApiPort}
         onClose={() => setPickerOpen(false)}
         onSelect={setActivePlaylist}
         title="A playlist selecionada não existe mais"

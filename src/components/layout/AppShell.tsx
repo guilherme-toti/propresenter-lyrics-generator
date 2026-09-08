@@ -27,7 +27,7 @@ export function AppShell() {
   const [importOpen, setImportOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
   const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
-  const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   const generationQuery = useGenerationStore((s) => s.query);
   const generationError = useGenerationStore((s) => s.error);
@@ -103,7 +103,7 @@ export function AppShell() {
       {desktop && (
         <PlaylistPickerModal
           open={missingPlaylist}
-          folder={playlistsFolder}
+          port={proApiPort}
           onClose={dismissMissingPlaylist}
           onSelect={setActivePlaylist}
           title="A playlist selecionada não foi encontrada"

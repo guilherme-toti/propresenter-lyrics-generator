@@ -16,11 +16,11 @@ export function useValidateActivePlaylist() {
 
   useEffect(() => {
     if (!isDesktopApp()) return;
-    const { activePlaylist, playlistsFolder, setActivePlaylist } = useDesktopStore.getState();
-    if (!activePlaylist || !playlistsFolder) return;
+    const { activePlaylist, proApiPort, setActivePlaylist } = useDesktopStore.getState();
+    if (!activePlaylist || !proApiPort) return;
 
     let cancelled = false;
-    playlistStillExists(playlistsFolder, activePlaylist.id).then((exists) => {
+    playlistStillExists(proApiPort, activePlaylist.id).then((exists) => {
       if (cancelled || exists) return;
       setActivePlaylist(null);
       setMissing(true);

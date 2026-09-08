@@ -5,18 +5,15 @@ import { z } from "zod";
 export interface PlaylistRef {
   id: string;
   name: string;
-  sourceFile: string;
 }
 
 const playlistRefSchema = z.object({
   id: z.string(),
   name: z.string(),
-  sourceFile: z.string(),
 });
 
 const persistedDesktopStateSchema = z.object({
   libraryFolder: z.string().nullable().optional(),
-  playlistsFolder: z.string().nullable().optional(),
   playlistsBaselined: z.boolean().optional(),
   activePlaylist: playlistRefSchema.nullable().optional(),
   knownPlaylistIds: z.array(z.string()).optional(),
@@ -26,22 +23,19 @@ const persistedDesktopStateSchema = z.object({
 interface DesktopState {
   /** ProPresenter Library folder — where exported .pro files are written. */
   libraryFolder: string | null;
-  /** ProPresenter Playlists folder — watched to detect newly created playlists. */
-  playlistsFolder: string | null;
   /** Port of ProPresenter's local HTTP API (Preferences → Network). Per-install. */
   proApiPort: number | null;
   /**
-   * False right after (re)configuring playlistsFolder, until the first scan
-   * completes. That first scan adopts everything it finds as the known
-   * baseline without prompting — only playlists that show up afterwards are
-   * "newly created" from the app's point of view.
+   * False right after (re)configuring proApiPort, until the first fetch from
+   * ProPresenter completes. That first fetch adopts everything it finds as
+   * the known baseline without prompting — only playlists that show up
+   * afterwards are "newly created" from the app's point of view.
    */
   playlistsBaselined: boolean;
   activePlaylist: PlaylistRef | null;
   knownPlaylistIds: string[];
 
   setLibraryFolder: (folder: string | null) => void;
-  setPlaylistsFolder: (folder: string | null) => void;
   setProApiPort: (port: number | null) => void;
   setActivePlaylist: (playlist: PlaylistRef | null) => void;
   rememberKnownPlaylists: (ids: string[]) => void;
@@ -52,7 +46,6 @@ export const useDesktopStore = create<DesktopState>()(
   persist(
     (set) => ({
       libraryFolder: null,
-      playlistsFolder: null,
       proApiPort: null,
       playlistsBaselined: false,
       activePlaylist: null,
@@ -60,10 +53,9 @@ export const useDesktopStore = create<DesktopState>()(
 
       setLibraryFolder: (folder) => set({ libraryFolder: folder }),
 
-      setPlaylistsFolder: (folder) =>
-        set({ playlistsFolder: folder, playlistsBaselined: false, knownPlaylistIds: [] }),
-
-      setProApiPort: (port) => set({ proApiPort: port }),
+      // A different port means talking to a different ProPresenter, which has its own set
+      // of playlists — the previously known baseline no longer applies.
+      setProApiPort: (port) => set({ proApiPort: port, playlistsBaselined: false, knownPlaylistIds: [] }),
 
       setActivePlaylist: (playlist) => set({ activePlaylist: playlist }),
 

@@ -104,10 +104,9 @@ Once saved, Ajustes only ever shows each key masked (e.g. `sk-or••••ab12
 Open **Ajustes** (the gear icon in the header — desktop app only) to configure:
 
 - **Pasta da Library** — a ProPresenter Library folder. Once set, clicking "Exportar" writes the `.pro` file straight into it (no download dialog) instead of downloading it; the ProPresenter Library panel already reads that folder natively, so the presentation shows up there.
-- **Pasta de Playlists** — your ProPresenter `Playlists` folder. The app polls it every ~20s for playlists it hasn't seen before (e.g. a new one you just created for this week's service) and asks "Nova playlist encontrada: '<nome>'. Usar ela como destino?" — accepting sets it as the export destination.
-- **Porta do ProPresenter** — the port from ProPresenter's Preferences → Network. With it set, "Exportar" also adds the presentation to the selected playlist; **Testar conexão** confirms the app can reach ProPresenter.
+- **Porta do ProPresenter** — the port from ProPresenter's Preferences → Network. With it set, the app asks ProPresenter directly (via its local HTTP API) for the current playlists whenever the app window regains focus, and surfaces any it hasn't seen before (e.g. a new one you just created for this week's service) with "Nova playlist encontrada: '<nome>'. Usar ela como destino?" — accepting sets it as the export destination. It also lets "Exportar" add the presentation to the selected playlist; **Testar conexão** confirms the app can reach ProPresenter.
 
-**Why the playlist add goes through ProPresenter's API rather than the playlist file:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`). ProPresenter reads that document into memory at launch and never re-reads it while running, so editing it from outside is invisible until a restart and gets overwritten by ProPresenter's own next save. Asking the running ProPresenter to make the change instead is immediate and safe. It does require ProPresenter to be open with Network enabled — without that, the export still writes into the Library and tells you to drag it in.
+**Why playlist discovery and the playlist add both go through ProPresenter's API rather than its files:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`). ProPresenter reads that document into memory at launch and never re-reads it while running, so a file it wrote may not even be flushed yet, and editing it from outside is invisible until a restart and gets overwritten by ProPresenter's own next save. Asking the running ProPresenter directly instead is immediate, live, and safe. It does require ProPresenter to be open with Network enabled — without that, the export still writes into the Library and tells you to drag it in, and playlist discovery simply finds nothing to suggest.
 
 ## Project structure
 
@@ -118,9 +117,9 @@ src/components/library/      Sidebar listing saved songs (Zustand-persisted)
 src/lib/alignment.ts         Pure functions: splitting lyrics into sections, pairing lines, slide grouping
 src/lib/ai/                  OpenRouter prompt/schema/response → Song mapping
 src/lib/useGenerateSong.ts   Shared "Generate with AI" flow
-src/lib/propresenter/        .pro document builder/encoder, Playlist document scanner/decoder, protobuf schema loaders
-src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library/Playlists folders, active playlist)
-src/lib/desktop/             usePlaylistWatcher (Playlists-folder polling), envFile.ts (reads/writes the desktop .env — API key)
+src/lib/propresenter/        .pro document builder/encoder, ProPresenter HTTP API client (playlist discovery/add), protobuf schema loaders
+src/lib/desktopStore.ts      Zustand store for desktop-only settings (Library folder, ProPresenter API port, active playlist)
+src/lib/desktop/             usePlaylistWatcher (fetches playlists from ProPresenter on window focus), envFile.ts (reads/writes the desktop .env — API key)
 src/components/settings/     Ajustes dialog + the shared playlist picker modal
 vendor/propresenter7-proto/  Vendored ProPresenter 7 .proto schema (unofficial, reverse-engineered)
 src-tauri/                   Tauri (Rust) desktop shell — bundled server, native windows, folder-picker dialog

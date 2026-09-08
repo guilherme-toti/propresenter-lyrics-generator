@@ -238,21 +238,15 @@ function ApiKeyRow({
 
 export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
   const libraryFolder = useDesktopStore((s) => s.libraryFolder);
-  const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
   const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setLibraryFolder = useDesktopStore((s) => s.setLibraryFolder);
-  const setPlaylistsFolder = useDesktopStore((s) => s.setPlaylistsFolder);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   const [pickerOpen, setPickerOpen] = useState(false);
 
   const pickLibraryFolder = async () => {
     const folder = await open({ directory: true, multiple: false, title: "Pasta da Library do ProPresenter" });
     if (typeof folder === "string") setLibraryFolder(folder);
-  };
-
-  const pickPlaylistsFolder = async () => {
-    const folder = await open({ directory: true, multiple: false, title: "Pasta de Playlists do ProPresenter" });
-    if (typeof folder === "string") setPlaylistsFolder(folder);
   };
 
   return (
@@ -284,13 +278,6 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
             onPick={pickLibraryFolder}
           />
 
-          <FolderRow
-            label="Pasta de Playlists"
-            description="Usada só para detectar quando uma nova playlist é criada no ProPresenter e sugerir ela como destino."
-            value={playlistsFolder}
-            onPick={pickPlaylistsFolder}
-          />
-
           <ProApiPortRow />
 
           <section>
@@ -302,7 +289,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
               <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
                 {activePlaylist?.name ?? "Nenhuma selecionada"}
               </span>
-              <Button variant="secondary" size="sm" disabled={!playlistsFolder} onClick={() => setPickerOpen(true)}>
+              <Button variant="secondary" size="sm" disabled={!proApiPort} onClick={() => setPickerOpen(true)}>
                 Trocar
               </Button>
             </div>
@@ -312,7 +299,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
 
       <PlaylistPickerModal
         open={pickerOpen}
-        folder={playlistsFolder}
+        port={proApiPort}
         onClose={() => setPickerOpen(false)}
         onSelect={setActivePlaylist}
         title="Escolher playlist de destino"

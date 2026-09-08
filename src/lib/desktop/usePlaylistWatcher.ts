@@ -4,17 +4,16 @@ import { useEffect, useState } from "react";
 import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore, type PlaylistRef } from "@/lib/desktopStore";
 
-const POLL_INTERVAL_MS = 20_000;
-
-async function scanFolder(folder: string): Promise<PlaylistRef[]> {
+async function fetchPlaylists(port: number): Promise<PlaylistRef[]> {
   try {
-    const res = await fetch("/api/playlists/scan", {
+    const res = await fetch("/api/playlists/list", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ folder }),
+      body: JSON.stringify({ port }),
     });
     if (!res.ok) return [];
     const data = await res.json();
+    if (data.error) return [];
     return Array.isArray(data.playlists) ? data.playlists : [];
   } catch {
     return [];
@@ -22,20 +21,21 @@ async function scanFolder(folder: string): Promise<PlaylistRef[]> {
 }
 
 /**
- * Polls the configured Playlists folder — but only while the app window is
+ * Asks ProPresenter for its playlists — but only while the app window is
  * focused — for playlists this app hasn't seen before (e.g. a new one
  * created for this week's service) and surfaces one at a time for the user
  * to optionally adopt as the export destination.
  *
- * Only polling while focused isn't just about saving work: it avoids
- * catching a playlist mid-edit. If it polled in the background, switching
+ * Only fetching while focused isn't just about saving work: it avoids
+ * catching a playlist mid-edit. If it fetched in the background, switching
  * back to the app right after renaming something in ProPresenter could
- * surface the *old* name (whatever was on disk during that last background
- * poll) instead of the current one — confusing. Polling on focus-gain means
- * the check always reflects what's on disk *right when you look at it*.
+ * surface the *old* name (whatever ProPresenter reported during that last
+ * background fetch) instead of the current one — confusing. Fetching on
+ * focus-gain means the check always reflects what ProPresenter has *right
+ * when you look at it*.
  */
 export function usePlaylistWatcher() {
-  const playlistsFolder = useDesktopStore((s) => s.playlistsFolder);
+  const proApiPort = useDesktopStore((s) => s.proApiPort);
   const rememberKnownPlaylists = useDesktopStore((s) => s.rememberKnownPlaylists);
   const markPlaylistsBaselined = useDesktopStore((s) => s.markPlaylistsBaselined);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
@@ -43,17 +43,16 @@ export function usePlaylistWatcher() {
   const [discovered, setDiscovered] = useState<PlaylistRef | null>(null);
 
   useEffect(() => {
-    if (!isDesktopApp() || !playlistsFolder) return;
+    if (!isDesktopApp() || !proApiPort) return;
 
     let cancelled = false;
-    let interval: ReturnType<typeof setInterval> | null = null;
 
-    const poll = async () => {
-      const playlists = await scanFolder(playlistsFolder);
+    const check = async () => {
+      const playlists = await fetchPlaylists(proApiPort);
       if (cancelled || playlists.length === 0) return;
 
       // Read fresh state directly from the store instead of React state, so
-      // this interval callback never closes over a stale snapshot.
+      // this callback never closes over a stale snapshot.
       const state = useDesktopStore.getState();
 
       if (!state.playlistsBaselined) {
@@ -69,29 +68,14 @@ export function usePlaylistWatcher() {
       }
     };
 
-    const startPolling = () => {
-      if (interval) return;
-      poll();
-      interval = setInterval(poll, POLL_INTERVAL_MS);
-    };
-
-    const stopPolling = () => {
-      if (!interval) return;
-      clearInterval(interval);
-      interval = null;
-    };
-
-    if (document.hasFocus()) startPolling();
-    window.addEventListener("focus", startPolling);
-    window.addEventListener("blur", stopPolling);
+    if (document.hasFocus()) check();
+    window.addEventListener("focus", check);
 
     return () => {
       cancelled = true;
-      stopPolling();
-      window.removeEventListener("focus", startPolling);
-      window.removeEventListener("blur", stopPolling);
+      window.removeEventListener("focus", check);
     };
-  }, [playlistsFolder, rememberKnownPlaylists, markPlaylistsBaselined]);
+  }, [proApiPort, rememberKnownPlaylists, markPlaylistsBaselined]);
 
   const confirm = (use: boolean) => {
     if (use && discovered) setActivePlaylist(discovered);
