@@ -13,6 +13,7 @@ import type { ExportConflict } from "@/lib/propresenter/libraries";
 interface SavedInfo {
   title: string;
   playlistName: string | null;
+  addedToPlaylist: boolean;
 }
 
 const SAVED_MESSAGE_TIMEOUT_MS = 15_000;
@@ -68,7 +69,31 @@ export function ExportFab({ song }: { song: Song }) {
     // not the requested name, so pasting into ProPresenter's search always finds the real file.
     if (typeof data.savedTo === "string") copyToClipboard(baseNameWithoutExt(data.savedTo));
 
-    setSaved({ title: overrides?.fileName || song.title || "sua música", playlistName: activePlaylist?.name ?? null });
+    // Best-effort: a selected playlist doesn't block the export if this fails (network hiccup,
+    // playlist renamed/deleted a moment ago, decode error) — the file's already safely in the
+    // Library either way, the user just falls back to dragging it in themselves.
+    let addedToPlaylist = false;
+    if (activePlaylist && playlistsFolder && typeof data.savedTo === "string") {
+      addedToPlaylist = await fetch("/api/playlists/add-item", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          playlistsFolder,
+          playlistId: activePlaylist.id,
+          presentationPath: data.savedTo,
+          name: overrides?.fileName || song.title || "Música sem título",
+        }),
+      })
+        .then((r) => (r.ok ? r.json() : null))
+        .then((d) => Boolean(d?.added))
+        .catch(() => false);
+    }
+
+    setSaved({
+      title: overrides?.fileName || song.title || "sua música",
+      playlistName: activePlaylist?.name ?? null,
+      addedToPlaylist,
+    });
   };
 
   const downloadFile = async () => {
@@ -168,15 +193,24 @@ export function ExportFab({ song }: { song: Song }) {
         <div className="flex w-full max-w-sm items-start gap-2 rounded-lg border border-line bg-white px-3 py-2.5 text-xs text-ink shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
           <p className="flex-1">
             Música importada com sucesso!
-            <br />
-            Procure por <strong>{saved.title}</strong> no ProPresenter
-            {saved.playlistName ? (
+            {saved.addedToPlaylist && saved.playlistName ? (
               <>
-                {" "}
-                e arraste para a playlist <strong>{saved.playlistName}</strong>.
+                <br />
+                Adicionada à playlist <strong>{saved.playlistName}</strong>.
               </>
             ) : (
-              "."
+              <>
+                <br />
+                Procure por <strong>{saved.title}</strong> no ProPresenter
+                {saved.playlistName ? (
+                  <>
+                    {" "}
+                    e arraste para a playlist <strong>{saved.playlistName}</strong>.
+                  </>
+                ) : (
+                  "."
+                )}
+              </>
             )}
           </p>
           <button
