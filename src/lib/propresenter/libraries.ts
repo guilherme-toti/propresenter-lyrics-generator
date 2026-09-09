@@ -16,6 +16,23 @@ export interface ExportConflict {
 }
 
 /**
+ * Compares a filename read from disk against one built in JavaScript.
+ *
+ * macOS stores accented characters decomposed — "É Ele.pro" on disk is 10 characters (E followed
+ * by U+0301 combining acute), while the same name built from a song title is 9 (precomposed É).
+ * They render identically and are not equal, so a raw comparison silently reported "no conflict"
+ * for every accented title: the overwrite prompt never appeared and the export wrote
+ * "É Ele (2).pro", then "(3)", on every re-export. Path-based lookups (see writeUniqueFile's
+ * fileExists) don't hit this, because macOS filesystems normalise on lookup — only string
+ * comparison does, which is why the bug showed up here and nowhere else.
+ *
+ * Case-insensitive to match the case-insensitive filesystems this app runs on.
+ */
+export function fileNamesMatch(a: string, b: string): boolean {
+  return a.normalize("NFC").toLowerCase() === b.normalize("NFC").toLowerCase();
+}
+
+/**
  * Enumerates every ProPresenter Library folder — the configured one (see Settings' "Pasta da
  * Library") plus every sibling folder next to it, since ProPresenter itself keeps all of a user's
  * libraries as sibling folders under one shared "Libraries" parent, and this app only ever asks

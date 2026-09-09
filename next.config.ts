@@ -1,7 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  // The Tauri desktop shell's webview loads http://127.0.0.1:3000 in dev
+  // The Tauri desktop shell's webview loads http://127.0.0.1:3100 in dev
   // (see src-tauri/src/lib.rs) — matches the loopback host the production
   // sidecar binds to. Next's dev server otherwise blocks that as a
   // cross-origin request since it only trusts "localhost" by default.

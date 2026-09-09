@@ -3,7 +3,7 @@ import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { isDesktopServer } from "@/lib/desktop/envFile";
-import { listLibraryDirs, type ExportConflict } from "@/lib/propresenter/libraries";
+import { fileNamesMatch, listLibraryDirs, type ExportConflict } from "@/lib/propresenter/libraries";
 import { sanitizeFileBaseName } from "@/lib/propresenter/encode";
 
 const requestSchema = z.object({
@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   for (const dir of dirs) {
     try {
       const entries = await fs.readdir(dir.path, { withFileTypes: true });
-      const match = entries.find((entry) => entry.isFile() && entry.name.toLowerCase() === fileName.toLowerCase());
+      const match = entries.find((entry) => entry.isFile() && fileNamesMatch(entry.name, fileName));
       if (match) {
         const conflict: ExportConflict = { library: dir.name, path: path.join(dir.path, match.name) };
         return NextResponse.json({ conflict });

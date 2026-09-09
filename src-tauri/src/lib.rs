@@ -19,9 +19,18 @@ const LOOPBACK: &str = "127.0.0.1";
 /// Fixed (not OS-assigned) so capabilities/default.json can name an exact
 /// `remote.urls` origin for the bundled server's window — Tauri's ACL scopes
 /// permissions (dialog, shell sidecar spawn, …) to specific window URLs, and
-/// an ephemeral port can't be listed in advance. Distinct from `next dev`'s
-/// 3000 so a leftover dev server never collides with the packaged app.
+/// an ephemeral port can't be listed in advance. Distinct from `DEV_PORT`
+/// so a leftover dev server never collides with the packaged app.
 const PROD_PORT: u16 = 17872;
+
+/// The port `next dev` is started on by the Tauri CLI's beforeDevCommand (see
+/// tauri.conf.json's build.beforeDevCommand, which passes `next dev -p`). Not
+/// Next's default 3000: another local service already owns that port here, and
+/// Next silently binds IPv6-only when 3000's IPv4 side is taken, which leaves
+/// this webview's `http://127.0.0.1:3000` hitting the other service instead.
+/// Keep in sync with tauri.conf.json's `devUrl`, capabilities/default.json's
+/// `remote.urls`, and package.json's `tauri:dev:next`.
+const DEV_PORT: u16 = 3100;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -97,7 +106,7 @@ fn create_main_window(app: &AppHandle) -> Result<(), Box<dyn std::error::Error>>
     let base_url = if cfg!(debug_assertions) {
         // `next dev` is already running by the time Tauri's devUrl check
         // passes control here — see build.devUrl/beforeDevCommand.
-        format!("http://{LOOPBACK}:3000")
+        format!("http://{LOOPBACK}:{DEV_PORT}")
     } else {
         spawn_bundled_server(app, PROD_PORT)?;
         // 45s, not 20s: a fresh Windows install has antivirus/Defender doing

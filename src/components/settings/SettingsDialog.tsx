@@ -41,6 +41,8 @@ function FolderRow({
   );
 }
 
+const CONNECTION_OK_TIMEOUT_MS = 5_000;
+
 function ProApiPortRow() {
   const proApiPort = useDesktopStore((s) => s.proApiPort);
   const setProApiPort = useDesktopStore((s) => s.setProApiPort);
@@ -55,6 +57,15 @@ function ProApiPortRow() {
   };
 
   const invalidInput = value.trim() !== "" && parsePort(value) === null;
+
+  // A successful test has served its purpose the moment it's read, so it clears itself.
+  // Failures stay put — they're actionable, and the user needs them on screen while fixing
+  // the port. They're already cleared by `save` on the next keystroke.
+  useEffect(() => {
+    if (!result?.ok) return;
+    const timer = setTimeout(() => setResult(null), CONNECTION_OK_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [result]);
 
   const test = async () => {
     const port = parsePort(value);
@@ -87,12 +98,18 @@ function ProApiPortRow() {
     <section>
       <h4 className="mb-1 text-sm font-semibold text-ink">Porta do ProPresenter</h4>
       <p className="mb-2 text-xs text-ink/60">
-        Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem isso, a música
-        é exportada para a Library mas não entra na playlist automaticamente.
+        Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem ela, nada é
+        adicionado à playlist.
       </p>
-      <div className="flex items-center gap-2">
+      {/* items-stretch, not items-center: Input is py-2/text-sm and Button size="sm" is
+          py-1.5/text-xs, so centring leaves the button visibly shorter than the field beside it.
+          Stretching matches their heights without hardcoding one. */}
+      <div className="flex items-stretch gap-2">
+        {/* text-xs overrides Input's own text-sm: every other value field in this dialog is a
+            text-xs span, and the 4px line-height difference otherwise makes this row — and the
+            button stretched to it — visibly taller than the playlist row beside it. */}
         <Input
-          className="flex-1"
+          className="flex-1 text-xs"
           inputMode="numeric"
           placeholder="ex.: 62830"
           value={value}
@@ -281,9 +298,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                 isOpen={isOpen}
                 endpoint="/api/settings/api-key"
                 title="Chave da OpenRouter"
-                description={
-                  'Usada pelo "Gerar com IA". Fica salva só neste computador — nunca é exibida por completo depois de salva.'
-                }
+                description={'Usada pelo "Gerar com IA".'}
                 placeholder="sk-..."
               />
 
@@ -291,7 +306,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                 isOpen={isOpen}
                 endpoint="/api/settings/musixmatch-api-key"
                 title="Chave da Musixmatch"
-                description="Usada pra buscar a letra oficial no catálogo. Fica salva só neste computador — nunca é exibida por completo depois de salva."
+                description="Usada pra buscar a letra oficial no catálogo."
                 placeholder="Cole a chave da Musixmatch"
               />
             </div>
