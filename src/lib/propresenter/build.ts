@@ -1,6 +1,7 @@
 import { groupIntoSlides } from "@/lib/alignment";
 import type { AlignedLine, Song } from "@/lib/types";
 import { buildEmptyNotesRtf, buildLyricsRtf, type RtfTextStyle } from "./rtf";
+import { slideLines } from "./slideText";
 
 const CANVAS_WIDTH = 1920;
 const CANVAS_HEIGHT = 1080;
@@ -102,11 +103,13 @@ const STYLE_B: Omit<RtfTextStyle, "fontSizePt"> = {
 
 /**
  * Always renders both languages — the church only ever presents the bilingual pair. Element "1" is
- * always Português and element "2" is always English, matching the Editor A/B convention.
+ * always Português and element "2" is always English, matching the Editor A/B convention. Both are
+ * projected in uppercase (see slideLines); cue names below keep the original casing so the slide
+ * list in ProPresenter stays readable.
  */
 function buildSlideElements(rows: AlignedLine[]) {
   return [
-    buildTextElement(rows.map((r) => r.a), {
+    buildTextElement(slideLines(rows, "a"), {
       name: "1",
       x: MARGIN_X,
       y: 60,
@@ -114,7 +117,7 @@ function buildSlideElements(rows: AlignedLine[]) {
       height: 460,
       style: { ...STYLE_A, fontSizePt: 72 },
     }),
-    buildTextElement(rows.map((r) => r.b), {
+    buildTextElement(slideLines(rows, "b"), {
       name: "2",
       x: MARGIN_X,
       y: 560,
