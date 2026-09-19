@@ -139,7 +139,10 @@ async function apiRequest(port: number, path: string, init?: RequestInit): Promi
     // tightening its PUT surfaces as a bare "respondeu 400" with the reason discarded.
     const detail = await res.text().catch(() => "");
     const suffix = detail ? ` ${detail.slice(0, 200)}` : "";
-    throw new Error(`O ProPresenter respondeu ${res.status} em ${path}.${suffix}`);
+    // The GET and PUT in appendToPlaylist share a path; naming the method is what tells them apart
+    // when a user reports the message back.
+    const method = init?.method ?? "GET";
+    throw new Error(`O ProPresenter respondeu ${res.status} em ${method} ${path}.${suffix}`);
   }
   return res;
 }
