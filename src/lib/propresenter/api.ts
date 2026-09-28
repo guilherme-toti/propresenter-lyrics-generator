@@ -35,15 +35,21 @@ export interface PlaylistApiItem {
  * whole list and positions must be contiguous.
  */
 export function toPutItem(item: PlaylistApiItem, index: number): Record<string, unknown> {
+  const targetUuid = item.presentation_info?.presentation_uuid ?? "";
   const out: Record<string, unknown> = {
-    id: { ...item.id, index },
+    // PUT resolves each item's target by `id.uuid`, not `target_uuid` despite what the docs
+    // and GET's own shape imply — `GET`'s `id.uuid` is the playlist item's own id, which
+    // doesn't match any real object and 404s on write with an empty body. ProPresenter mints
+    // a fresh item id on every write regardless (see the function doc below), so overwriting
+    // it here with the real target is safe and is the only way PUT can find the target at all.
+    id: targetUuid ? { ...item.id, uuid: targetUuid, index } : { ...item.id, index },
     type: item.type,
     is_hidden: item.is_hidden ?? false,
     is_pco: item.is_pco ?? false,
     // Declared `nullable` in ProPresenter's OpenAPI document, but its deserializer
     // rejects null outright: "invalid type: null, expected a string". Headers and
     // placeholders have no target object, so they take an empty string.
-    target_uuid: item.presentation_info?.presentation_uuid ?? "",
+    target_uuid: targetUuid,
   };
   // Only sent when present — a null header_color on a non-header is rejected the
   // same way target_uuid's null is.
