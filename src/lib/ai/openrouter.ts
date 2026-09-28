@@ -84,7 +84,7 @@ JSON schema:
  * for it to reconcile away.
  */
 function literalTranslationSystemPrompt(targetLanguage: ChurchLanguage): string {
-  return `Translate the given song lyrics literally and faithfully into ${targetLanguage}, for a bilingual church slide-building tool — prioritize accuracy to meaning over rhyme or singability.
+  return `Translate the given song lyrics into ${targetLanguage}, for a bilingual church slide-building tool. Aim for the translation a native ${targetLanguage} speaker would naturally write — idiomatic, singable phrasing rather than a stiff word-for-word rendering — while staying faithful to the original's meaning, message, and intent. Don't paraphrase so freely that the message shifts.
 
 Preserve the EXACT structure of the input: the same number of blank-line-separated sections, in the same order, and the same number of lines within each section as given. Do not add, remove, merge, reorder, or repeat any line or section, even if the source has repeats, oddities, or seems incomplete — translate it exactly as given, line for line.
 
