@@ -57,10 +57,11 @@ const REALIGN_SYSTEM_PROMPT = `You fix and re-align two pasted lyric texts for a
 
 The user pasted a song's lyrics into two editors, one language per editor, but the pasting is often imperfect: a section or line missing from one side, duplicate or extra lines, sections in a different order between the two sides, lines that don't correspond to each other, stray whitespace, or typos.
 
-Your job is to reconcile the two texts into a clean, section-aligned, line-by-line structure:
+This is a structural matching task, not a translation task — you are not translating anything. Both texts already contain their own language's actual lyrics; your job is only to reshape how each is split into lines and sections so the two line up with each other:
 - Split both into sections and align them with each other.
 - Within a section, each line is a pair: make sure both sides have the same number of lines and line i of one corresponds in meaning/position to line i of the other.
-- If a line or section is missing from one side, fill it in yourself — translate it literally and faithfully (prioritize accuracy to meaning over rhyme or singability) — rather than leaving it blank.
+- Use whichever side already correctly has a given line or section as the reference for reshaping the other: split, merge, reorder, and add or remove line breaks in the other side's existing wording so it lines up — without rewriting that wording.
+- Never invent, rewrite, or translate new lyric content. If a line or section genuinely has no counterpart anywhere in the other side's text — not just split or ordered differently — leave that side's line as an empty string rather than making one up; that gap is for a separate translation step, not this one.
 - Remove accidental duplicate lines/sections; merge or split lines so they correspond 1:1.
 - If a section repeats verbatim later in the song, include it again as its own entry in "sections".
 - Preserve the actual wording of both languages exactly as given whenever it is already correct — only change what's necessary to fix alignment problems.
