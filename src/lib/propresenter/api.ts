@@ -206,6 +206,26 @@ export async function findLibraryPresentation(port: number, name: string): Promi
   return null;
 }
 
+const SONGS_HEADER_NAME = "MUSICAS";
+
+/**
+ * Where a newly added song belongs: right after the last item already under the
+ * "MUSICAS" section header, so new songs land with the other songs instead of at
+ * the end of the whole service order. Falls back to the end of the playlist when
+ * there's no such header (or it's the last section already).
+ */
+export function findSongInsertionIndex(existing: PlaylistApiItem[]): number {
+  const headerIndex = existing.findIndex(
+    (item) => item.type === "header" && item.id.name.trim().toUpperCase() === SONGS_HEADER_NAME,
+  );
+  if (headerIndex === -1) return existing.length;
+
+  const nextHeaderIndex = existing.findIndex(
+    (item, index) => index > headerIndex && item.type === "header",
+  );
+  return nextHeaderIndex === -1 ? existing.length : nextHeaderIndex;
+}
+
 /**
  * Appends a presentation to a playlist.
  *
@@ -237,9 +257,11 @@ export async function appendToPlaylist(
   // the outcome the caller wanted, so this is success, not a no-op worth reporting.
   if (existing.some((item) => item.presentation_info?.presentation_uuid === presentationUuid)) return;
 
+  const insertAt = findSongInsertionIndex(existing);
   const body = [
-    ...existing.map((item, index) => toPutItem(item, index)),
-    presentationItem(presentationUuid, name, existing.length),
+    ...existing.slice(0, insertAt).map((item, index) => toPutItem(item, index)),
+    presentationItem(presentationUuid, name, insertAt),
+    ...existing.slice(insertAt).map((item, index) => toPutItem(item, insertAt + 1 + index)),
   ];
 
   await apiRequest(port, `/v1/playlist/${encodedPlaylistId}`, {
