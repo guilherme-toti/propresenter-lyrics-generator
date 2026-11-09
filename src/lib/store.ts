@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import {
   alignmentToRaw,
+  applyRawTextEdits,
   buildAlignmentFromManual,
   deleteRow,
   insertRowAfter,
@@ -28,6 +29,8 @@ interface LibraryState {
    * for the user to redo (see LyricsEditors' "Alinhar letra"/"Realinhar com IA"). */
   replaceSide: (side: "languageA" | "languageB", raw: string, source: SideSource, attribution: SideAttribution) => void;
   realignFromManualText: () => void;
+  /** Follows an edit in the editors while an alignment exists — see applyRawTextEdits. */
+  syncAlignmentWithRaw: () => void;
   /** `translatedSide`, when given, also marks that side's literalTranslation status "done" — used
    * by the on-demand literal-translation flow (see useAutoLiteralTranslation), not the manual
    * "Realinhar com IA" button. */
@@ -103,6 +106,15 @@ export const useLibraryStore = create<LibraryState>()(
             ? { song: touch({ ...state.song, alignment: buildAlignmentFromManual(state.song.languageA, state.song.languageB) }) }
             : state,
         );
+      },
+
+      syncAlignmentWithRaw: () => {
+        set((state) => {
+          if (!state.song) return state;
+          const { alignment, languageA, languageB } = state.song;
+          const synced = applyRawTextEdits(alignment, languageA, languageB) ?? buildAlignmentFromManual(languageA, languageB);
+          return { song: touch({ ...state.song, alignment: synced }) };
+        });
       },
 
       applyAiRealignment: (result, translatedSide) => {

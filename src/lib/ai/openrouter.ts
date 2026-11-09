@@ -7,6 +7,7 @@ import {
   type AiRealignResponse,
   type AiSongResponse,
 } from "./schema";
+import { fillBlankRepeats, restoreDroppedLines } from "@/lib/alignment";
 import {
   fetchLyricsByTrackId,
   fetchTranslation,
@@ -55,15 +56,16 @@ JSON schema:
 
 const REALIGN_SYSTEM_PROMPT = `You fix and re-align two pasted lyric texts for a bilingual church slide-building tool. The two texts are always English and Português (Brasil), in some order — you are not told which is which and it doesn't matter.
 
-The user pasted a song's lyrics into two editors, one language per editor, but the pasting is often imperfect: a section or line missing from one side, duplicate or extra lines, sections in a different order between the two sides, lines that don't correspond to each other, stray whitespace, or typos.
+The user pasted a song's lyrics into two editors, one language per editor, but the pasting is often imperfect: a section or line missing from one side, one side writing out repeats the other side wrote only once, sections in a different order between the two sides, lines that don't correspond to each other, stray whitespace, or typos.
 
 This is a structural matching task, not a translation task — you are not translating anything. Both texts already contain their own language's actual lyrics; your job is only to reshape how each is split into lines and sections so the two line up with each other:
 - Split both into sections and align them with each other.
 - Within a section, each line is a pair: make sure both sides have the same number of lines and line i of one corresponds in meaning/position to line i of the other.
 - Use whichever side already correctly has a given line or section as the reference for reshaping the other: split, merge, reorder, and add or remove line breaks in the other side's existing wording so it lines up — without rewriting that wording.
-- Never invent, rewrite, or translate new lyric content. If a line or section genuinely has no counterpart anywhere in the other side's text — not just split or ordered differently — leave that side's line as an empty string rather than making one up; that gap is for a separate translation step, not this one.
-- Remove accidental duplicate lines/sections; merge or split lines so they correspond 1:1.
-- If a section repeats verbatim later in the song, include it again as its own entry in "sections".
+- Never invent, rewrite, or translate new lyric content. If a line or section genuinely has no counterpart anywhere in the other side's text — not just split, ordered, or repeated differently — leave that side's line as an empty string rather than making one up; that gap is for a separate translation step, not this one.
+- Repeats are intentional — never remove them. When one side repeats a section or line (often a chorus or bridge sung several times at the end) more times than the other side writes it, keep every repeat as its own entry in "sections", and fill the other side of each repeat with that side's own text for it, copied exactly from where it already appears. Copying text the user already pasted is not inventing or translating.
+- Never drop a line from either text. A line with no counterpart in the other language (an ad-lib like "yeah, yeah", or a line only one text has) stays as its own pair, with an empty string on the other side.
+- Merge or split lines so they correspond 1:1.
 - Preserve the actual wording of both languages exactly as given whenever it is already correct — only change what's necessary to fix alignment problems.
 - Each line is a 2-element array [editorALine, editorBLine] — the first element is ALWAYS whichever text was pasted into Editor A, the second is ALWAYS Editor B. Do not swap the two editors.
 - Section "label" values must always be in Portuguese, regardless of which language is in Editor A or B — e.g. "Verso 1", "Verso 2", "Refrão", "Refrão 2", "Pré-Refrão", "Ponte", "Introdução", "Final".
@@ -357,7 +359,10 @@ export async function realignSongWithAi(
   if (!result.success) {
     throw malformedResponse("realign", result.error);
   }
-  return { sections: expandWireSections(result.data.sections) };
+  // Repeats are filled before restoring dropped lines, so a repeat the model left blank is copied
+  // into place rather than treated as a dropped line.
+  const sections = fillBlankRepeats(expandWireSections(result.data.sections));
+  return { sections: restoreDroppedLines(sections, languageARaw, languageBRaw) };
 }
 
 /**

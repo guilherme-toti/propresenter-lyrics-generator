@@ -110,6 +110,7 @@ export function LyricsEditors({
 }) {
   const setLanguageRaw = useLibraryStore((s) => s.setLanguageRaw);
   const realignFromManualText = useLibraryStore((s) => s.realignFromManualText);
+  const syncAlignmentWithRaw = useLibraryStore((s) => s.syncAlignmentWithRaw);
   const applyAiRealignment = useLibraryStore((s) => s.applyAiRealignment);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -132,7 +133,7 @@ export function LyricsEditors({
     if (!hasAlignment) return;
     if (autoRealignTimer.current) clearTimeout(autoRealignTimer.current);
     autoRealignTimer.current = setTimeout(() => {
-      realignFromManualText();
+      syncAlignmentWithRaw();
     }, AUTO_REALIGN_DELAY_MS);
   };
 
