@@ -64,11 +64,12 @@ test("omits header_color and presentation_info when the source item has neither"
   assert.equal(result.is_pco, false);
 });
 
-test("renumbers index to the item's new position", () => {
+test("renumbers index to the item's new position and points id.uuid at the presentation", () => {
   const result = toPutItem(presentation, 7) as { id: { index: number; uuid: string } };
 
   assert.equal(result.id.index, 7);
-  assert.equal(result.id.uuid, "1F736F53-907E-4949-8AE4-D970EFFFC2B1");
+  // PUT resolves an item by id.uuid, so GET's own item id (1F736F53-…) would 404 on write.
+  assert.equal(result.id.uuid, "1186633D-57AB-4952-8898-885B8A77D473");
 });
 
 test("builds a new presentation item that carries its uuid in both places", () => {
