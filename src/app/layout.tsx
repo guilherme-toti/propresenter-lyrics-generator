@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
-import { Fraunces, Geist_Mono, Inter } from "next/font/google";
+import { Geist_Mono, Inter } from "next/font/google";
+import localFont from "next/font/local";
 import "./globals.css";
 
 const inter = Inter({
@@ -7,10 +8,15 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-const fraunces = Fraunces({
+// Self-hosted: on some build hosts (Vercel, the macOS release runner) Google Fonts serves Fraunces
+// with font URLs that Turbopack's next/font/google can't resolve ("next/font/google queries have
+// exactly one entry"), failing the whole build. This is the same variable Latin file Google serves
+// for weights 500 and 600; its OFL license sits next to it.
+const fraunces = localFont({
+  src: "./fonts/fraunces-latin.woff2",
+  weight: "500 600",
   variable: "--font-fraunces",
-  subsets: ["latin"],
-  weight: ["500", "600"],
+  adjustFontFallback: "Times New Roman",
 });
 
 const geistMono = Geist_Mono({
