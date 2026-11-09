@@ -50,6 +50,17 @@ export async function getMaskedApiKey(keyName: string): Promise<string | null> {
   return key ? maskApiKey(key) : null;
 }
 
+/** The packaged app gets these keys from Rust's `load_user_env` at spawn, but nothing
+ * reads the file under plain `next dev`, so without this the keys saved in Ajustes are
+ * lost on every dev server restart. Never overrides: in the packaged app Rust has already
+ * set them, and a developer's own `.env.local` should win. */
+export async function loadDesktopEnv(): Promise<void> {
+  if (!isDesktopServer()) return;
+  for (const [key, value] of await readEnvFile()) {
+    process.env[key] ??= value;
+  }
+}
+
 /** Persists the key to disk and applies it to the running server process
  * immediately, so it takes effect without an app restart. */
 export async function saveApiKey(keyName: string, apiKey: string): Promise<string> {
