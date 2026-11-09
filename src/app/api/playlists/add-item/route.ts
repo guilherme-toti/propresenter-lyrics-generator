@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isDesktopServer } from "@/lib/desktop/envFile";
+import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { appendToPlaylist, findLibraryPresentation } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
@@ -19,9 +19,8 @@ const bodySchema = z.object({
  * ProPresenter is invisible until restart and gets overwritten by its next save, which is the bug
  * this route exists to fix. */
 export async function POST(request: Request) {
-  if (!isDesktopServer()) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
-  }
+  const rejection = rejectDesktopOnlyRequest(request);
+  if (rejection) return rejection;
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);

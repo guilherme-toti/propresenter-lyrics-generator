@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { encodeSongAsProFile, proFileName, sanitizeFileBaseName } from "@/lib/propresenter/encode";
 import { writeUniqueFile } from "@/lib/exportToFolder";
 import { isPathInside } from "@/lib/propresenter/libraries";
@@ -29,6 +30,13 @@ export async function POST(request: Request) {
   }
 
   const { song, destinationFolder, fileName, overwritePath } = parsed.data;
+
+  // Both paths are client-supplied, so writing to them is only safe on the user's own machine
+  // and only for the app's own pages: anyone else could aim it at any folder the server can write.
+  if (destinationFolder || overwritePath) {
+    const rejection = rejectDesktopOnlyRequest(request);
+    if (rejection) return rejection;
+  }
 
   try {
     const buffer = await encodeSongAsProFile(song);

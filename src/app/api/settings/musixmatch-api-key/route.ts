@@ -1,28 +1,24 @@
 import { NextResponse } from "next/server";
-import { z } from "zod";
-import { getMaskedApiKey, isDesktopServer, saveApiKey } from "@/lib/desktop/envFile";
+import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
+import { apiKeyRequestSchema } from "@/lib/desktop/envEntry";
+import { getMaskedApiKey, saveApiKey } from "@/lib/desktop/envFile";
 
 const KEY_NAME = "MUSIXMATCH_API_KEY";
 
-const requestSchema = z.object({
-  apiKey: z.string().trim().min(1, "Cole uma chave válida."),
-});
+export async function GET(request: Request) {
+  const rejection = rejectDesktopOnlyRequest(request);
+  if (rejection) return rejection;
 
-export async function GET() {
-  if (!isDesktopServer()) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
-  }
   const masked = await getMaskedApiKey(KEY_NAME);
   return NextResponse.json({ masked });
 }
 
 export async function POST(request: Request) {
-  if (!isDesktopServer()) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
-  }
+  const rejection = rejectDesktopOnlyRequest(request);
+  if (rejection) return rejection;
 
   const body = await request.json().catch(() => null);
-  const parsed = requestSchema.safeParse(body);
+  const parsed = apiKeyRequestSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Requisição inválida." }, { status: 400 });
   }

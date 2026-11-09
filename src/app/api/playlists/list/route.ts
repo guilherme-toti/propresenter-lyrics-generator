@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isDesktopServer } from "@/lib/desktop/envFile";
+import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { listPlaylists } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
@@ -16,9 +16,8 @@ const bodySchema = z.object({
  * this responds 200 with an empty list and the Portuguese error message rather than
  * failing the request, exactly like add-item treats a failed add. */
 export async function POST(request: Request) {
-  if (!isDesktopServer()) {
-    return NextResponse.json({ error: "Not found." }, { status: 404 });
-  }
+  const rejection = rejectDesktopOnlyRequest(request);
+  if (rejection) return rejection;
 
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);

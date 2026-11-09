@@ -1,15 +1,10 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { getAppConfigDir } from "./appConfigDir";
+import { isDesktopServer } from "./desktopServer";
+import { assertSafeEnvEntry } from "./envEntry";
 
 const ENV_FILENAME = ".env";
-
-/** Only ever set by the Tauri sidecar/dev process (see src-tauri/src/lib.rs and the
- * `tauri:dev:next` script) — a plain web deploy never sets this, so routes gated on
- * it 404 there instead of letting any visitor rewrite the shared deployment's env. */
-export function isDesktopServer(): boolean {
-  return process.env.PMA_DESKTOP_APP === "1";
-}
 
 async function readEnvFile(): Promise<Map<string, string>> {
   const filePath = path.join(getAppConfigDir(), ENV_FILENAME);
@@ -32,6 +27,7 @@ async function readEnvFile(): Promise<Map<string, string>> {
 }
 
 async function writeEnvFile(entries: Map<string, string>): Promise<void> {
+  for (const [key, value] of entries) assertSafeEnvEntry(key, value);
   const dir = getAppConfigDir();
   await fs.mkdir(dir, { recursive: true });
   const filePath = path.join(dir, ENV_FILENAME);
