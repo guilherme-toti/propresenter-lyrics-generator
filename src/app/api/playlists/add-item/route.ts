@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { appendToPlaylist, findLibraryPresentation } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
@@ -10,7 +9,7 @@ const bodySchema = z.object({
   presentationName: z.string().min(1),
 });
 
-/** Desktop-only, called right after a successful export to the Library, to also add the new
+/** Called right after a successful export to the Library, to also add the new
  * presentation to the selected playlist via ProPresenter's HTTP API.
  *
  * A false `added` is not a request error: the export itself already succeeded and the file is
@@ -19,9 +18,6 @@ const bodySchema = z.object({
  * ProPresenter is invisible until restart and gets overwritten by its next save, which is the bug
  * this route exists to fix. */
 export async function POST(request: Request) {
-  const rejection = rejectDesktopOnlyRequest(request);
-  if (rejection) return rejection;
-
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {

@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { listPlaylists } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
   port: z.number().int().min(1).max(65535),
 });
 
-/** Desktop-only: lists the playlists a user could export into, read from ProPresenter's
+/** Lists the playlists a user could export into, read from ProPresenter's
  * HTTP API instead of decoding its playlist files (see `api.ts`'s module doc for why the
  * file-reading approach was replaced).
  *
@@ -16,9 +15,6 @@ const bodySchema = z.object({
  * this responds 200 with an empty list and the Portuguese error message rather than
  * failing the request, exactly like add-item treats a failed add. */
 export async function POST(request: Request) {
-  const rejection = rejectDesktopOnlyRequest(request);
-  if (rejection) return rejection;
-
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {

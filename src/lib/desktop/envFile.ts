@@ -2,31 +2,22 @@ import fs from "node:fs/promises";
 import path from "node:path";
 import { getAppConfigDir } from "./appConfigDir";
 import { isDesktopServer } from "./desktopServer";
-import { assertSafeEnvEntry } from "./envEntry";
+import { assertSafeEnvEntry, parseUserEnv, type UserEnvKey } from "./envEntry";
 
 const ENV_FILENAME = ".env";
 
-async function readEnvFile(): Promise<Map<string, string>> {
-  const filePath = path.join(getAppConfigDir(), ENV_FILENAME);
+/** Only the keys the app manages come back, so the next save also drops any other line. */
+async function readEnvFile(): Promise<Map<UserEnvKey, string>> {
   let content: string;
   try {
-    content = await fs.readFile(filePath, "utf8");
+    content = await fs.readFile(path.join(getAppConfigDir(), ENV_FILENAME), "utf8");
   } catch {
     return new Map();
   }
-
-  const entries = new Map<string, string>();
-  for (const line of content.split("\n")) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eq = trimmed.indexOf("=");
-    if (eq === -1) continue;
-    entries.set(trimmed.slice(0, eq).trim(), trimmed.slice(eq + 1).trim());
-  }
-  return entries;
+  return parseUserEnv(content);
 }
 
-async function writeEnvFile(entries: Map<string, string>): Promise<void> {
+async function writeEnvFile(entries: Map<UserEnvKey, string>): Promise<void> {
   for (const [key, value] of entries) assertSafeEnvEntry(key, value);
   const dir = getAppConfigDir();
   await fs.mkdir(dir, { recursive: true });
@@ -41,7 +32,7 @@ function maskApiKey(key: string): string {
   return `${key.slice(0, 5)}••••${key.slice(-4)}`;
 }
 
-export async function getMaskedApiKey(keyName: string): Promise<string | null> {
+export async function getMaskedApiKey(keyName: UserEnvKey): Promise<string | null> {
   const key = (await readEnvFile()).get(keyName);
   return key ? maskApiKey(key) : null;
 }
@@ -59,7 +50,7 @@ export async function loadDesktopEnv(): Promise<void> {
 
 /** Persists the key to disk and applies it to the running server process
  * immediately, so it takes effect without an app restart. */
-export async function saveApiKey(keyName: string, apiKey: string): Promise<string> {
+export async function saveApiKey(keyName: UserEnvKey, apiKey: string): Promise<string> {
   const entries = await readEnvFile();
   entries.set(keyName, apiKey);
   await writeEnvFile(entries);

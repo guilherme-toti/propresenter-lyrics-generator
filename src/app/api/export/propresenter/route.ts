@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { encodeSongAsProFile, proFileName, sanitizeFileBaseName } from "@/lib/propresenter/encode";
 import { writeUniqueFile } from "@/lib/exportToFolder";
 import { isPathInside } from "@/lib/propresenter/libraries";
@@ -10,7 +9,7 @@ import { songSchema } from "@/lib/songSchema";
 
 const bodySchema = z.object({
   song: songSchema,
-  // Set only by the desktop app: when present, the .pro is written straight into
+  // Set once a Library folder is chosen in Ajustes: the .pro is written straight into
   // this folder (a ProPresenter Library folder) instead of being returned for download.
   destinationFolder: z.string().min(1).optional(),
   // User-chosen name from ExportOverwriteModal (see /api/export/check-conflict) — overrides the
@@ -30,13 +29,6 @@ export async function POST(request: Request) {
   }
 
   const { song, destinationFolder, fileName, overwritePath } = parsed.data;
-
-  // Both paths are client-supplied, so writing to them is only safe on the user's own machine
-  // and only for the app's own pages: anyone else could aim it at any folder the server can write.
-  if (destinationFolder || overwritePath) {
-    const rejection = rejectDesktopOnlyRequest(request);
-    if (rejection) return rejection;
-  }
 
   try {
     const buffer = await encodeSongAsProFile(song);

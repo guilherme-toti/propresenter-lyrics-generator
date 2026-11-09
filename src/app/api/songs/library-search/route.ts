@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { searchLibrary } from "@/lib/propresenter/librarySearch";
 
 const requestSchema = z.object({
@@ -9,9 +8,6 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const rejection = rejectDesktopOnlyRequest(request);
-  if (rejection) return rejection;
-
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {

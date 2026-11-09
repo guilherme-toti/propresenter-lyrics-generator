@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { fileNamesMatch, listLibraryDirs, type ExportConflict } from "@/lib/propresenter/libraries";
 import { sanitizeFileBaseName } from "@/lib/propresenter/encode";
 
@@ -12,9 +11,6 @@ const requestSchema = z.object({
 });
 
 export async function POST(request: Request) {
-  const rejection = rejectDesktopOnlyRequest(request);
-  if (rejection) return rejection;
-
   const body = await request.json().catch(() => null);
   const parsed = requestSchema.safeParse(body);
   if (!parsed.success) {

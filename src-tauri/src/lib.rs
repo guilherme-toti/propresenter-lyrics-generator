@@ -32,6 +32,12 @@ const PROD_PORT: u16 = 17872;
 /// `remote.urls`, and package.json's `tauri:dev:next`.
 const DEV_PORT: u16 = 3100;
 
+/// The only entries the user's `.env` may pass into the server's environment:
+/// any other name (NODE_OPTIONS, PORT, PMA_DESKTOP_APP, …) would let whoever
+/// can write that file change how the server runs. Keep in sync with
+/// USER_ENV_KEYS in src/lib/desktop/envEntry.ts.
+const USER_ENV_KEYS: [&str; 2] = ["OPENROUTER_API_KEY", "MUSIXMATCH_API_KEY"];
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -228,18 +234,17 @@ fn spawn_bundled_server(
     let server_dir = dunce::simplified(&app.path().resolve("resources/server", BaseDirectory::Resource)?).to_path_buf();
     let server_entry = server_dir.join("server.js");
 
-    let mut env: Vec<(String, String)> = vec![
+    // The user's entries go first: the last entry for a name wins, so the fixed
+    // ones below hold even if USER_ENV_KEYS ever grows to include one of them.
+    let mut env = load_user_env(app);
+    env.extend([
         ("PORT".into(), port.to_string()),
         ("HOSTNAME".into(), LOOPBACK.into()),
         ("NODE_ENV".into(), "production".into()),
-        // Lets server-side API routes (e.g. /api/settings/api-key, which writes
-        // to this same .env file) confirm they're running inside the desktop
-        // sidecar before acting — that route must 404 on a plain web deploy,
-        // where it would otherwise let any visitor overwrite the shared
-        // deployment's env vars.
+        // Marks this process as the app's own server (see
+        // src/lib/desktop/desktopServer.ts).
         ("PMA_DESKTOP_APP".into(), "1".into()),
-    ];
-    env.extend(load_user_env(app));
+    ]);
 
     let command = app
         .shell()
@@ -278,19 +283,23 @@ fn spawn_bundled_server(
     Ok(())
 }
 
-/// Reads `OPENROUTER_API_KEY` (and any other server env vars) from a
-/// user-editable `.env` file in the app's config directory — the packaged
-/// equivalent of the `.env.local` file used in development. Missing file is
-/// not an error: the AI flow just reports itself unconfigured, same as dev.
+/// Reads the API keys saved in Ajustes from the `.env` file in the app's
+/// config directory — the packaged equivalent of the `.env.local` file used in
+/// development. Missing file is not an error: the AI flow just reports itself
+/// unconfigured, same as dev.
 fn load_user_env(app: &tauri::AppHandle) -> Vec<(String, String)> {
     let Ok(config_dir) = app.path().app_config_dir() else {
         return Vec::new();
     };
     let env_path = config_dir.join(".env");
     match dotenvy::from_path_iter(&env_path) {
-        Ok(iter) => iter.filter_map(Result::ok).collect(),
+        Ok(iter) => allowed_user_env(iter.filter_map(Result::ok)),
         Err(_) => Vec::new(),
     }
+}
+
+fn allowed_user_env(entries: impl Iterator<Item = (String, String)>) -> Vec<(String, String)> {
+    entries.filter(|(key, _)| USER_ENV_KEYS.contains(&key.as_str())).collect()
 }
 
 /// Blocks setup until the bundled server accepts TCP connections, or the
@@ -306,4 +315,30 @@ fn wait_for_server(port: u16, timeout: Duration) -> bool {
         std::thread::sleep(Duration::from_millis(100));
     }
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(key: &str, value: &str) -> (String, String) {
+        (key.to_string(), value.to_string())
+    }
+
+    #[test]
+    fn keeps_only_the_api_keys() {
+        let entries = vec![
+            entry("OPENROUTER_API_KEY", "sk-or"),
+            entry("NODE_OPTIONS", "--require /tmp/evil.js"),
+            entry("PORT", "1"),
+            entry("HOSTNAME", "0.0.0.0"),
+            entry("PMA_DESKTOP_APP", "0"),
+            entry("MUSIXMATCH_API_KEY", "mxm"),
+            entry("openrouter_api_key", "case matters"),
+        ];
+        assert_eq!(
+            allowed_user_env(entries.into_iter()),
+            vec![entry("OPENROUTER_API_KEY", "sk-or"), entry("MUSIXMATCH_API_KEY", "mxm")],
+        );
+    }
 }

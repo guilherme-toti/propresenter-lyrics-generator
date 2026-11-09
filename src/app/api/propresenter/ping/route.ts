@@ -1,16 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { rejectDesktopOnlyRequest } from "@/lib/desktop/desktopServer";
 import { pingProPresenter } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({ port: z.number().int().min(1).max(65535) });
 
-/** Desktop-only: backs the "Testar conexão" button in Ajustes. A failed connection is a
+/** Backs the "Testar conexão" button in Ajustes. A failed connection is a
  * reportable result, not a request error, so it comes back 200 with ok:false. */
 export async function POST(request: Request) {
-  const rejection = rejectDesktopOnlyRequest(request);
-  if (rejection) return rejection;
-
   const body = await request.json().catch(() => null);
   const parsed = bodySchema.safeParse(body);
   if (!parsed.success) {
