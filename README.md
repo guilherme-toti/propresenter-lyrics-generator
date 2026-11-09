@@ -28,27 +28,19 @@ All of this rests on how well the configured model *remembers* specific recordin
 - **Next.js 16** (App Router, Turbopack, React 19)
 - **TypeScript**, **Zod** for schema validation at every trust boundary (AI responses, export payloads)
 - **Tailwind CSS 4**
-- **Zustand** (+ `persist`) for the local song library — everything lives in the browser's `localStorage`; there is no backend database
+- **Zustand** (+ `persist`) for the local song library — everything lives in the webview's `localStorage`; there is no backend database
 - **protobufjs**, decoding/encoding against a vendored, reverse-engineered ProPresenter 7 `.proto` schema (`vendor/propresenter7-proto`, MIT licensed — see that folder's `README.md`)
-- **Tauri 2** (Rust) wraps the same app as a native Windows/macOS/Linux desktop installer — see [Desktop app](#desktop-app-windowsmacos) below
-
-## Getting started (web)
-
-```bash
-npm install
-cp .env.example .env.local   # add your OpenRouter key to use "Generate with AI"
-npm run dev
-```
-
-Open [http://localhost:3000](http://localhost:3000). The manual flow works with no configuration; the AI flow needs `OPENROUTER_API_KEY` set (see `.env.example`) and otherwise fails gracefully with a message explaining how to configure it.
+- **Tauri 2** (Rust) ships the app as a native Windows/macOS/Linux desktop installer — see [Desktop app](#desktop-app-windowsmacos) below
 
 ## Desktop app (Windows/macOS)
 
-The exact same app also ships as a native installable desktop app via [Tauri](https://tauri.app): a small Rust shell opens the OS's native webview (WebView2 on Windows, WebKit on macOS) and points it at a bundled copy of this same Next.js app, run as a background sidecar process — no separate backend, no Chromium bundled, no code fork. The web app's studio, AI generation, and `.pro` download all work identically; the desktop build additionally knows how to export straight into a ProPresenter Library folder (see below).
+The app is desktop-only, built with [Tauri](https://tauri.app): a small Rust shell opens the OS's native webview (WebView2 on Windows, WebKit on macOS) and points it at a bundled copy of this Next.js app, run as a background sidecar server on `127.0.0.1` — no separate backend, no Chromium bundled. There is no web deploy.
+
+That server only answers the app's own pages: `src/proxy.ts` refuses (403) any `/api/*` request that doesn't name a loopback host, comes from another origin, or carries a body other than JSON, so a website open in the same machine's browser can't spend your OpenRouter credits or touch your files.
 
 ### Prerequisites
 
-- Node.js 20+ and npm (already needed for the web app) — this repo commits `package-lock.json` as the single source of truth for dependency versions, so use `npm` rather than `pnpm`/`yarn` for installs to avoid a second, drifting lockfile
+- Node.js 20+ and npm — this repo commits `package-lock.json` as the single source of truth for dependency versions, so use `npm` rather than `pnpm`/`yarn` for installs to avoid a second, drifting lockfile
 - [Rust](https://www.rust-lang.org/tools/install) via `rustup` (stable toolchain)
 - Platform build tools, per [Tauri's prerequisites guide](https://tauri.app/start/prerequisites/):
   - **Windows**: "Desktop development with C++" workload from the Visual Studio Build Tools, and the WebView2 runtime (preinstalled on Windows 11 and most updated Windows 10 machines)
@@ -63,7 +55,7 @@ npm install
 npm run tauri:dev
 ```
 
-This starts `next dev` (hot reload included) and opens it in a native window. The AI flow still needs `OPENROUTER_API_KEY` — same `.env.local` as the web app.
+This starts `next dev` on port 3100 (hot reload included, via `npm run tauri:dev:next`) and opens it in a native window. The manual flow works with no configuration; the AI flow needs `OPENROUTER_API_KEY`, either saved in **Ajustes** (see below) or set in a `.env.local` (`cp .env.example .env.local`), and otherwise fails gracefully with a message explaining how to configure it.
 
 ### Build an installer
 
@@ -92,16 +84,18 @@ Update signing needs a one-time setup (already done for this repo — see the pe
 
 ### Configuring `OPENROUTER_API_KEY` and `MUSIXMATCH_API_KEY` for the installed app
 
-The packaged app doesn't read `.env.local` (that's a `next dev`/web-only convention). Instead, open **Ajustes** and paste each key into its own field ("Chave da OpenRouter", "Chave da Musixmatch") — the app writes it to a `.env` file in its own config directory and applies it immediately, no restart needed:
+The packaged app doesn't read `.env.local` (that's a `next dev` convention). Instead, open **Ajustes** and paste each key into its own field ("Chave da OpenRouter", "Chave da Musixmatch") — the app writes it to a `.env` file in its own config directory and applies it immediately, no restart needed:
 
 - **Windows**: `%APPDATA%\com.pma.lyricsstudio\.env`
 - **macOS**: `~/Library/Application Support/com.pma.lyricsstudio/.env`
 
-Once saved, Ajustes only ever shows each key masked (e.g. `sk-or••••ab12`) — pasting a new value is the only way to change it. Without `OPENROUTER_API_KEY` configured, the app runs fine and the manual (non-AI) flow works exactly as in the browser. Without `MUSIXMATCH_API_KEY`, catalogue search/lyrics lookup is unavailable.
+Once saved, Ajustes only ever shows each key masked (e.g. `sk-or••••ab12`) — pasting a new value is the only way to change it. Without `OPENROUTER_API_KEY` configured, the app runs fine and the manual (non-AI) flow still works. Without `MUSIXMATCH_API_KEY`, catalogue search/lyrics lookup is unavailable.
+
+That file only ever holds these two keys: both the Rust shell and the server ignore any other line in it (so it can't set `NODE_OPTIONS` or change the server's port), and the next save drops them.
 
 ### Exporting straight into ProPresenter, and auto-detecting the current playlist
 
-Open **Ajustes** (the gear icon in the header — desktop app only) to configure:
+Open **Ajustes** (the gear icon in the header) to configure:
 
 - **Pasta da Library** — a ProPresenter Library folder. Once set, clicking "Exportar" writes the `.pro` file straight into it (no download dialog) instead of downloading it; the ProPresenter Library panel already reads that folder natively, so the presentation shows up there.
 - **Porta do ProPresenter** — the port from ProPresenter's Preferences → Network. With it set, the app asks ProPresenter directly (via its local HTTP API) for the current playlists whenever the app window regains focus, and surfaces any it hasn't seen before (e.g. a new one you just created for this week's service) with "Nova playlist encontrada: '<nome>'. Usar ela como destino?" — accepting sets it as the export destination. It also lets "Exportar" add the presentation to the selected playlist; **Testar conexão** confirms the app can reach ProPresenter.
@@ -112,6 +106,7 @@ Open **Ajustes** (the gear icon in the header — desktop app only) to configure
 
 ```
 src/app/                     Routes: the studio page, API routes (generate-song, export/propresenter)
+src/proxy.ts                 Request guard every /api route sits behind (see src/lib/desktop/requestGuard.ts)
 src/components/studio/       New-song dialog, lyric editors, alignment preview, export panel
 src/components/library/      Sidebar listing saved songs (Zustand-persisted)
 src/lib/alignment.ts         Pure functions: splitting lyrics into sections, pairing lines, slide grouping
@@ -128,8 +123,8 @@ scripts/tauri/prebuild.mjs   Assembles the standalone Next.js server + sidecar N
 
 ## Scripts
 
-- `npm run dev` — start the web dev server
-- `npm run build` / `npm run start` — production build and serve (web)
-- `npm run lint` — ESLint
 - `npm run tauri:dev` — run the desktop app in development
+- `npm run tauri:dev:next` — only the app's dev server on port 3100, without the native window (what `tauri:dev` starts first)
+- `npm run build` — `next build`, producing the standalone server the installer bundles
+- `npm run lint` — ESLint
 - `npm run tauri:build` — build the desktop installer for the current OS

@@ -8,7 +8,7 @@ const inter = Inter({
   subsets: ["latin"],
 });
 
-// Self-hosted: on some build hosts (Vercel, the macOS release runner) Google Fonts serves Fraunces
+// Self-hosted: on some build hosts (such as the macOS release runner) Google Fonts serves Fraunces
 // with font URLs that Turbopack's next/font/google can't resolve ("next/font/google queries have
 // exactly one entry"), failing the whole build. This is the same variable Latin file Google serves
 // for weights 500 and 600; its OFL license sits next to it.

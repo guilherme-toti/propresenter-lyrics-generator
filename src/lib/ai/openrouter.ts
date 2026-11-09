@@ -171,7 +171,7 @@ async function callOpenRouter(
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new OpenRouterConfigError(
-      "A chave da OpenRouter não está configurada. No app instalado, use Ajustes → Chave da OpenRouter; na versão web, defina OPENROUTER_API_KEY no ambiente.",
+      "A chave da OpenRouter não está configurada. Use Ajustes → Chave da OpenRouter.",
     );
   }
   const model = modelOverride || process.env.OPENROUTER_MODEL || "openai/gpt-4o";

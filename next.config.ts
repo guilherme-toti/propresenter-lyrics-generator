@@ -9,17 +9,13 @@ const nextConfig: NextConfig = {
   // Bundles a minimal, self-contained server (.next/standalone) instead of
   // relying on the full node_modules tree — this is what the Tauri desktop
   // build packages as its sidecar server (see scripts/tauri/prebuild.mjs).
-  // Only turned on for that build (via the TAURI_BUILD env var it sets):
-  // standalone mode changes Next's own output-tracing in a way that Vercel's
-  // deploy pipeline doesn't expect, so a plain `next build` (Vercel, `npm run
-  // build`, `npm run dev`) must not set it.
-  ...(process.env.TAURI_BUILD === "true" ? { output: "standalone" as const } : {}),
+  output: "standalone",
   // protobufjs reads these .proto files from disk at request time (not via static import),
-  // so serverless bundlers need an explicit hint to trace and include them in the output.
+  // so the standalone output's file tracing can't see them and would leave them out.
+  // Every API route may decode ProPresenter files, so all of them get the schemas, rather than a
+  // per-route list that a new route can silently be missing from.
   outputFileTracingIncludes: {
-    "/api/export/propresenter": ["./vendor/propresenter7-proto/proto/**/*"],
-    "/api/playlists/scan": ["./vendor/propresenter7-proto/proto/**/*"],
-    "/api/songs/library-search": ["./vendor/propresenter7-proto/proto/**/*"],
+    "/api/**": ["./vendor/propresenter7-proto/proto/**/*"],
   },
 };
 
