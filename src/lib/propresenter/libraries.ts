@@ -7,6 +7,15 @@ export interface LibraryDir {
   path: string;
 }
 
+/** A .pro file in one of the user's libraries, as listed for import or found by a library search. */
+export interface ImportableFile {
+  library: string;
+  filename: string;
+  /** The filename without ".pro" — what lists show, so "É Ele (2)" stays tellable from "É Ele". */
+  name: string;
+  path: string;
+}
+
 /** A same-named .pro file found in some library by /api/export/check-conflict — see
  * ExportOverwriteModal, which offers to overwrite `path` instead of assuming it's in whichever
  * library is currently configured. */
@@ -56,6 +65,31 @@ export async function listLibraryDirs(libraryFolder: string): Promise<LibraryDir
     // Fall through to the single-folder fallback below.
   }
   return [{ name: path.basename(libraryFolder), path: libraryFolder }];
+}
+
+async function listProFiles(dir: LibraryDir): Promise<ImportableFile[]> {
+  const entries = await fs.readdir(dir.path, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pro"))
+    .map((entry) => ({
+      library: dir.name,
+      filename: entry.name,
+      name: entry.name.replace(/\.pro$/i, ""),
+      path: path.join(dir.path, entry.name),
+    }));
+}
+
+/** Every .pro file across every library (see listLibraryDirs), sorted by the name lists show. */
+export async function listImportableFiles(libraryFolder: string): Promise<ImportableFile[]> {
+  const files: ImportableFile[] = [];
+  for (const dir of await listLibraryDirs(libraryFolder)) {
+    try {
+      files.push(...(await listProFiles(dir)));
+    } catch {
+      // One sibling library folder unreadable (permissions, etc.) shouldn't sink the whole listing.
+    }
+  }
+  return files.sort((a, b) => a.name.localeCompare(b.name, "pt-BR"));
 }
 
 /** Whether `target` is `base` itself or somewhere inside it — used to make sure a client-supplied

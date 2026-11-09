@@ -1,26 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { isDesktopServer } from "@/lib/desktop/envFile";
-import { listLibraryDirs } from "@/lib/propresenter/libraries";
+import { listImportableFiles } from "@/lib/propresenter/libraries";
 
 const requestSchema = z.object({
   libraryFolder: z.string().min(1),
 });
-
-export interface ImportableFile {
-  library: string;
-  filename: string;
-  path: string;
-}
-
-async function listProFiles(folder: string, libraryLabel: string): Promise<ImportableFile[]> {
-  const entries = await fs.readdir(folder, { withFileTypes: true });
-  return entries
-    .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pro"))
-    .map((entry) => ({ library: libraryLabel, filename: entry.name, path: path.join(folder, entry.name) }));
-}
 
 export async function POST(request: Request) {
   if (!isDesktopServer()) {
@@ -33,20 +18,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
   }
 
-  const { libraryFolder } = parsed.data;
-
   try {
-    const libraryDirs = await listLibraryDirs(libraryFolder);
-
-    const files: ImportableFile[] = [];
-    for (const dir of libraryDirs) {
-      try {
-        files.push(...(await listProFiles(dir.path, dir.name)));
-      } catch {
-        // One sibling library folder unreadable (permissions, etc.) shouldn't sink the whole listing.
-      }
-    }
-    files.sort((a, b) => a.filename.localeCompare(b.filename, "pt-BR"));
+    const files = await listImportableFiles(parsed.data.libraryFolder);
     return NextResponse.json({ files });
   } catch (err) {
     console.error("import-list: listing library folders failed", err);

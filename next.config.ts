@@ -19,6 +19,7 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/export/propresenter": ["./vendor/propresenter7-proto/proto/**/*"],
     "/api/playlists/scan": ["./vendor/propresenter7-proto/proto/**/*"],
+    "/api/songs/library-search": ["./vendor/propresenter7-proto/proto/**/*"],
   },
 };
 

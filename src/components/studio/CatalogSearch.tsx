@@ -1,48 +1,158 @@
 "use client";
 
-import { useState } from "react";
-import { Loader2, Search } from "lucide-react";
+import { useRef, useState, type ReactNode } from "react";
+import { ChevronDown, CircleAlert, Globe, LibraryBig, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
+import { PickRow } from "@/components/ui/PickRow";
 import { useGenerateSong } from "@/lib/useGenerateSong";
+import { useImportSong, type ImportableFile } from "@/lib/useImportSong";
 import type { TrackCandidate } from "@/lib/lyrics/musixmatch";
 
 const MIN_QUERY_LENGTH = 2;
+/** Library rows shown before "Mostrar mais" — few enough that the internet results start in view
+ * too, instead of below the fold where nobody would know they exist. */
+const LIBRARY_PREVIEW_COUNT = 3;
 
 /**
- * null = nothing searched yet; an array = a search that ran. Empty covers both "found nothing"
- * and "catalogue not configured" — either way there's nothing to pick from.
+ * One source's side of a search. "done" with no items covers both "found nothing" and "catalogue
+ * not configured" — either way there's nothing to pick from.
  */
-type Results = TrackCandidate[] | null;
+type SourceState<T> =
+  | { status: "idle" }
+  | { status: "loading" }
+  | { status: "done"; items: T[] }
+  | { status: "error"; message: string };
+
+const IDLE = { status: "idle" } as const;
+
+/** Lets NewSongDialog offer songs already in the user's ProPresenter libraries next to the
+ * catalogue's; the caller decides what opening one does and reports its progress back. */
+export interface LibrarySearch {
+  folder: string;
+  onPick: (file: ImportableFile) => void;
+  /** The file being opened, if any — its row spins and every row is locked meanwhile. */
+  openingPath: string | null;
+  openError: string | null;
+}
+
+function SectionStatus({ icon, text }: { icon: ReactNode; text: string }) {
+  return <p className="flex items-center gap-2 text-sm text-ink/55">{icon}{text}</p>;
+}
+
+function ErrorLine({ message }: { message: string }) {
+  return (
+    <p className="flex items-center gap-2 text-sm text-red-600">
+      <CircleAlert size={14} className="shrink-0" />
+      {message}
+    </p>
+  );
+}
+
+function ResultSection<T>({
+  heading,
+  state,
+  emptyText,
+  renderItem,
+  previewCount,
+  onShowAll,
+}: {
+  heading: ReactNode | null;
+  state: SourceState<T>;
+  emptyText: string;
+  renderItem: (item: T) => ReactNode;
+  /** Rows shown until `onShowAll` is pressed; omit to show every row. */
+  previewCount?: number;
+  onShowAll?: () => void;
+}) {
+  if (state.status === "idle") return null;
+  const items = state.status === "done" ? state.items : [];
+  const visible = previewCount === undefined ? items : items.slice(0, previewCount);
+  const hiddenCount = items.length - visible.length;
+  return (
+    <section>
+      {heading && <h3 className="mb-2 flex items-center gap-1.5 text-xs font-medium text-ink/60">{heading}</h3>}
+      {state.status === "loading" && (
+        <SectionStatus icon={<Loader2 size={14} className="animate-spin" />} text="Procurando…" />
+      )}
+      {state.status === "error" && <ErrorLine message={state.message} />}
+      {state.status === "done" && items.length === 0 && <SectionStatus icon={null} text={emptyText} />}
+      {visible.length > 0 && <ul className="flex flex-col gap-1">{visible.map(renderItem)}</ul>}
+      {hiddenCount > 0 && onShowAll && (
+        <Button variant="ghost" size="sm" onClick={onShowAll} className="mt-1">
+          <ChevronDown size={14} />
+          Mostrar mais {hiddenCount}
+        </Button>
+      )}
+    </section>
+  );
+}
 
 /**
  * Shared catalogue search box + results list, used both by NewSongDialog (pick a recording to
  * generate a whole song) and the per-language "buscar gravação" swap (pick a recording for one
  * side only). Owns its own query/results state so each dialog mount starts fresh; callers decide
- * what picking a track actually does.
+ * what picking a track actually does. With `library`, the same query also runs against the user's
+ * ProPresenter libraries, listed first, since reopening a song already made beats generating it again.
  */
-export function CatalogSearch({ onPick, autoFocus = true }: { onPick: (track: TrackCandidate) => void; autoFocus?: boolean }) {
+export function CatalogSearch({
+  onPick,
+  autoFocus = true,
+  library,
+}: {
+  onPick: (track: TrackCandidate) => void;
+  autoFocus?: boolean;
+  library?: LibrarySearch;
+}) {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<Results>(null);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const { search } = useGenerateSong();
+  const [internet, setInternet] = useState<SourceState<TrackCandidate>>(IDLE);
+  const [local, setLocal] = useState<SourceState<ImportableFile>>(IDLE);
+  const [showAllLocal, setShowAllLocal] = useState(false);
+  // Each search (and each keystroke) takes a new number, so an answer that arrives after the
+  // query changed is dropped instead of listing recordings for words no longer typed.
+  const searchId = useRef(0);
+  const { search: searchCatalogue } = useGenerateSong();
+  const { search: searchLibrary } = useImportSong();
 
+  const searching = internet.status === "loading" || local.status === "loading";
   const canSubmit = query.trim().length >= MIN_QUERY_LENGTH;
+  const opening = library?.openingPath != null;
 
-  const handleSearch = async () => {
+  const handleSearch = () => {
     if (!canSubmit || searching) return;
-    setSearching(true);
-    setError(null);
-    const outcome = await search(query);
-    setSearching(false);
+    const id = ++searchId.current;
+    const isCurrent = () => id === searchId.current;
 
-    if ("error" in outcome) {
-      setError(outcome.error);
-      return;
-    }
-    setResults(outcome.results);
+    setInternet({ status: "loading" });
+    void searchCatalogue(query).then((outcome) => {
+      if (!isCurrent()) return;
+      setInternet(
+        "error" in outcome ? { status: "error", message: outcome.error } : { status: "done", items: outcome.results },
+      );
+    });
+
+    if (!library) return;
+    setLocal({ status: "loading" });
+    setShowAllLocal(false);
+    void searchLibrary(library.folder, query).then((outcome) => {
+      if (!isCurrent()) return;
+      setLocal(
+        "error" in outcome ? { status: "error", message: outcome.error } : { status: "done", items: outcome.files },
+      );
+    });
   };
+
+  const renderTrack = (track: TrackCandidate) => (
+    <li key={track.commontrackId}>
+      <PickRow
+        title={track.title}
+        subtitle={track.artist || "artista desconhecido"}
+        trailing={track.language}
+        disabled={opening}
+        onClick={() => onPick(track)}
+      />
+    </li>
+  );
 
   return (
     <div className="space-y-4">
@@ -58,10 +168,11 @@ export function CatalogSearch({ onPick, autoFocus = true }: { onPick: (track: Tr
               setQuery(e.target.value);
               // The old results describe the old query; keeping them on screen would invite
               // picking a recording that has nothing to do with what's now typed.
-              setResults(null);
-              setError(null);
+              searchId.current += 1;
+              setInternet(IDLE);
+              setLocal(IDLE);
             }}
-            onKeyDown={(e) => e.key === "Enter" && void handleSearch()}
+            onKeyDown={(e) => e.key === "Enter" && handleSearch()}
           />
           <Button onClick={handleSearch} disabled={!canSubmit || searching}>
             {searching ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
@@ -71,35 +182,55 @@ export function CatalogSearch({ onPick, autoFocus = true }: { onPick: (track: Tr
         <p className="mt-1.5 text-xs text-ink/45">A busca procura tanto no título quanto dentro da letra.</p>
       </div>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
-
-      {results !== null && results.length > 0 && (
-        <div>
-          <p className="mb-2 text-xs font-medium text-ink/60">Escolha a gravação:</p>
-          <ul className="flex max-h-64 flex-col gap-1 overflow-y-auto">
-            {results.map((track) => (
-              <li key={track.commontrackId}>
-                <button
-                  onClick={() => onPick(track)}
-                  className="flex w-full items-baseline justify-between gap-3 rounded-lg border border-line bg-white px-3 py-2 text-left transition-colors hover:border-accent hover:bg-accent/5"
-                >
-                  <span className="min-w-0">
-                    <span className="block truncate text-sm text-ink">{track.title}</span>
-                    <span className="block truncate text-xs text-ink/55">
-                      {track.artist || "artista desconhecido"}
-                    </span>
-                  </span>
-                  {track.language && (
-                    <span className="shrink-0 text-[13px] uppercase text-ink/40">{track.language}</span>
-                  )}
-                </button>
+      {library ? (
+        <div className="max-h-[22rem] space-y-4 overflow-y-auto">
+          <ResultSection
+            heading={
+              <>
+                <LibraryBig size={14} />
+                Da sua biblioteca local
+              </>
+            }
+            state={local}
+            emptyText="Nada encontrado na sua biblioteca."
+            previewCount={showAllLocal ? undefined : LIBRARY_PREVIEW_COUNT}
+            onShowAll={() => setShowAllLocal(true)}
+            renderItem={(file) => (
+              <li key={file.path}>
+                <PickRow
+                  title={file.name}
+                  subtitle={file.library}
+                  busy={library.openingPath === file.path}
+                  disabled={opening}
+                  onClick={() => library.onPick(file)}
+                />
               </li>
-            ))}
-          </ul>
+            )}
+          />
+          {library.openError && <ErrorLine message={library.openError} />}
+          <ResultSection
+            heading={
+              <>
+                <Globe size={14} />
+                Da internet
+              </>
+            }
+            state={internet}
+            emptyText="Nada encontrado na internet."
+            renderItem={renderTrack}
+          />
+        </div>
+      ) : (
+        <div className="max-h-64 overflow-y-auto">
+          <ResultSection
+            // A lone list needs no source label — only a prompt, and only once there's something to pick.
+            heading={internet.status === "done" && internet.items.length > 0 ? "Escolha a gravação:" : null}
+            state={internet}
+            emptyText="Nada encontrado no catálogo."
+            renderItem={renderTrack}
+          />
         </div>
       )}
-
-      {results !== null && results.length === 0 && <p className="text-sm text-ink/55">Nada encontrado no catálogo.</p>}
     </div>
   );
 }

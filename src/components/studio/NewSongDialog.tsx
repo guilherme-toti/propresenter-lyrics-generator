@@ -5,7 +5,10 @@ import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { CatalogSearch } from "@/components/studio/CatalogSearch";
 import { useLibraryStore } from "@/lib/store";
+import { useDesktopStore } from "@/lib/desktopStore";
+import { isDesktopApp } from "@/lib/tauri/env";
 import { useGenerateSong } from "@/lib/useGenerateSong";
+import { useOpenLibraryFile } from "@/lib/useImportSong";
 import { useGenerationStore } from "@/lib/generationStore";
 import type { TrackCandidate } from "@/lib/lyrics/musixmatch";
 
@@ -15,11 +18,23 @@ interface NewSongDialogProps {
 }
 
 export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
+  return (
+    <Modal open={open} onClose={onClose} title="Nova música">
+      <NewSongOptions onClose={onClose} />
+    </Modal>
+  );
+}
+
+/** Mounted only while the dialog is open, so a search or a failed library open never carries over
+ * into the next "Nova música". */
+function NewSongOptions({ onClose }: { onClose: () => void }) {
   const startSong = useLibraryStore((s) => s.startSong);
   const { generate } = useGenerateSong();
   const startGeneration = useGenerationStore((s) => s.start);
   const failGeneration = useGenerationStore((s) => s.fail);
   const finishGeneration = useGenerationStore((s) => s.finish);
+  const libraryFolder = useDesktopStore((s) => s.libraryFolder);
+  const libraryFile = useOpenLibraryFile(onClose);
 
   const handleManual = () => {
     startSong({ mode: "manual" });
@@ -41,14 +56,29 @@ export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   };
 
   return (
-    <Modal open={open} onClose={onClose} title="Nova música">
-      <div className="space-y-4">
-        <CatalogSearch onPick={(track) => void handlePick(track)} />
-        <Button variant="secondary" onClick={handleManual} className="w-full">
-          <PenLine size={16} />
-          Criar manualmente
-        </Button>
-      </div>
-    </Modal>
+    <div className="space-y-4">
+      <CatalogSearch
+        onPick={(track) => void handlePick(track)}
+        library={
+          isDesktopApp() && libraryFolder
+            ? {
+                folder: libraryFolder,
+                onPick: (file) => void libraryFile.open(file),
+                openingPath: libraryFile.openingPath,
+                openError: libraryFile.error,
+              }
+            : undefined
+        }
+      />
+      <Button
+        variant="secondary"
+        onClick={handleManual}
+        disabled={libraryFile.openingPath !== null}
+        className="w-full"
+      >
+        <PenLine size={16} />
+        Criar manualmente
+      </Button>
+    </div>
   );
 }
