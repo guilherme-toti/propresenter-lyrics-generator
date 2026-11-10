@@ -1,10 +1,17 @@
-import { test } from "node:test";
+import { afterEach, beforeEach, describe, mock, test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  appendToPlaylist,
   flattenPlaylists,
+  listPlaylists,
+  findLibraryPresentation,
   namesMatch,
+  pingProPresenter,
   presentationItem,
+  ProPresenterError,
+  proPresenterFailureMessage,
   toPutItem,
+  triggerMacro,
   type PlaylistApiItem,
   type PlaylistTreeNode,
 } from "./api.ts";
@@ -186,4 +193,134 @@ test("skips a node missing a name", () => {
   ];
 
   assert.deepEqual(flattenPlaylists(tree), []);
+});
+
+describe("when ProPresenter fails a request", () => {
+  // Never the real ProPresenter port: if a stub ever failed to install, this one refuses the
+  // connection instead of running a macro on someone's live output.
+  const port = 1;
+  const playlistId = "0CF150E4-389D-41A2-BE19-0031C222D76A";
+  const macroUuid = "C3000000-0000-0000-0000-000000000001";
+  let logged: string[];
+
+  beforeEach(() => {
+    logged = [];
+    mock.method(console, "error", (...args: unknown[]) => {
+      logged.push(args.map(String).join(" "));
+    });
+  });
+
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  /** Answers each fetch with the next response in order. */
+  function respondWith(...responses: Response[]) {
+    mock.method(globalThis, "fetch", async () => {
+      const next = responses.shift();
+      if (!next) throw new Error("unexpected extra request");
+      return next;
+    });
+  }
+
+  async function rejectionOf(run: () => Promise<unknown>): Promise<unknown> {
+    try {
+      await run();
+    } catch (err) {
+      return err;
+    }
+    assert.fail("expected the call to fail");
+  }
+
+  async function failureOf(run: () => Promise<unknown>): Promise<ProPresenterError> {
+    const err = await rejectionOf(run);
+    assert.ok(err instanceof ProPresenterError);
+    return err;
+  }
+
+  /** What a user must never see: a status code, an HTTP method or an API path. */
+  const technical = /\b\d{3}\b|\b(GET|PUT)\b|\/v1\//;
+
+  test("shows a plain message and logs the status, method, path and complaint", async () => {
+    respondWith(
+      Response.json({ items: [] }),
+      new Response("invalid type: null, expected a string", { status: 400 }),
+    );
+
+    const err = await failureOf(() => appendToPlaylist(port, playlistId, macroUuid, "É Ele"));
+
+    assert.doesNotMatch(err.message, technical);
+    assert.match(err.message, /reinicie o ProPresenter/);
+    assert.equal(err.status, 400);
+    assert.equal(logged.length, 1);
+    assert.match(logged[0], /400/);
+    assert.match(logged[0], new RegExp(`PUT /v1/playlist/${playlistId}`));
+    assert.match(logged[0], /invalid type: null, expected a string/);
+  });
+
+  test("says something wasn't found on a 404, and keeps the status for the caller", async () => {
+    respondWith(new Response("", { status: 404 }));
+
+    const err = await failureOf(() => triggerMacro(port, macroUuid));
+
+    assert.doesNotMatch(err.message, technical);
+    assert.match(err.message, /não achou/);
+    assert.equal(err.status, 404);
+    assert.match(logged[0], new RegExp(`404.*GET /v1/macro/${macroUuid}/trigger`));
+  });
+
+  test("shows a plain message for a body that isn't JSON, and logs where it came from", async () => {
+    respondWith(new Response("<html>not json</html>", { status: 200 }));
+
+    const err = await failureOf(() => listPlaylists(port));
+
+    assert.doesNotMatch(err.message, technical);
+    assert.match(err.message, /não entendeu/);
+    assert.equal(err.status, undefined);
+    assert.match(logged[0], /GET \/v1\/playlists/);
+  });
+
+  test("keeps the connection message when ProPresenter can't be reached", async () => {
+    mock.method(globalThis, "fetch", async () => {
+      throw new TypeError("fetch failed");
+    });
+
+    const err = await failureOf(() => pingProPresenter(port));
+
+    assert.match(err.message, /^Não foi possível falar com o ProPresenter\./);
+    assert.equal(err.status, undefined);
+  });
+
+  describe("the message a route shows", () => {
+    const fallback = "Falha ao adicionar à playlist.";
+
+    test("is a ProPresenterError's own, logged once by the request rather than again by the route", async () => {
+      respondWith(new Response("", { status: 500 }));
+      const err = await rejectionOf(() => findLibraryPresentation(port, "É Ele"));
+
+      const message = proPresenterFailureMessage(err, "playlists/add-item", fallback);
+
+      assert.match(message, /reinicie o ProPresenter/);
+      assert.equal(logged.length, 1);
+      assert.doesNotMatch(logged[0], /playlists\/add-item/);
+    });
+
+    test("is the route's fallback for JSON of the wrong shape, logged under the route", async () => {
+      // /v1/libraries answering an object instead of an array throws a TypeError in English.
+      respondWith(Response.json({}));
+      const err = await rejectionOf(() => findLibraryPresentation(port, "É Ele"));
+
+      const message = proPresenterFailureMessage(err, "playlists/add-item", fallback);
+
+      assert.equal(message, fallback);
+      assert.equal(logged.length, 1);
+      assert.match(logged[0], /^playlists\/add-item failed/);
+      assert.match(logged[0], /not iterable/);
+    });
+
+    test("is the route's fallback for a value thrown that isn't an Error", () => {
+      assert.equal(proPresenterFailureMessage("boom", "propresenter/ping", "Falha ao conectar."), "Falha ao conectar.");
+      assert.match(logged[0], /^propresenter\/ping failed boom/);
+    });
+  });
 });

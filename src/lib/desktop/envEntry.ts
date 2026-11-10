@@ -46,6 +46,10 @@ export const apiKeyRequestSchema = z.object({
 
 export type ApiKeyRequest = z.infer<typeof apiKeyRequestSchema>;
 
+/** What /api/settings/*-api-key answer to a read or a save: the key masked, never in full, or null
+ * when none is saved. */
+export const maskedApiKeyReplySchema = z.object({ masked: z.string().nullable() });
+
 /** Last line of defense behind the request schemas: whatever reaches the file must stay on
  * its own line. The error names the key only, since the value is a secret. */
 export function assertSafeEnvEntry(key: string, value: string): void {

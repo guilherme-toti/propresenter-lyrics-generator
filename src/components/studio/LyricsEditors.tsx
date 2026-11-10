@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TextArea } from "@/components/ui/Field";
 import { splitIntoBlocks } from "@/lib/alignment";
+import { realignLyrics } from "@/lib/lyricsApi";
+import { errorMessage } from "@/lib/postJson";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
 
@@ -141,18 +143,9 @@ export function LyricsEditors({
     setAiLoading(true);
     setAiError(null);
     try {
-      const res = await fetch("/api/realign-song", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ languageARaw: song.languageA, languageBRaw: song.languageB }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Algo deu errado.");
-      }
-      applyAiRealignment(data);
+      applyAiRealignment(await realignLyrics(song.languageA, song.languageB));
     } catch (err) {
-      setAiError(err instanceof Error ? err.message : "Algo deu errado.");
+      setAiError(errorMessage(err));
     } finally {
       setAiLoading(false);
     }

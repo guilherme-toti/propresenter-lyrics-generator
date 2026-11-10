@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { appendToPlaylist, findLibraryPresentation } from "@/lib/propresenter/api";
+import { portSchema } from "@/lib/desktop/parsePort";
+import { appendToPlaylist, findLibraryPresentation, proPresenterFailureMessage } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
-  port: z.number().int().min(1).max(65535),
+  port: portSchema,
   playlistId: z.string().min(1),
   /** The exported filename without ".pro" — what ProPresenter names the library item. */
   presentationName: z.string().min(1),
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
   } catch (err) {
     return NextResponse.json({
       added: false,
-      reason: err instanceof Error ? err.message : "Falha ao adicionar à playlist.",
+      reason: proPresenterFailureMessage(err, "playlists/add-item", "Tente de novo."),
     });
   }
 }

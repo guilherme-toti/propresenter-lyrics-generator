@@ -92,3 +92,33 @@ test("refuses a same-origin request on a non-loopback host, such as a LAN addres
 test("trusts the IPv6 loopback host", () => {
   assert.equal(isTrustedDesktopRequest(jsonPost({ host: "[::1]:17872", origin: "http://[::1]:17872" })), true);
 });
+
+const mediaGet = (fetchSite: string | null) => {
+  const headers = new Headers({ host: "127.0.0.1:17872" });
+  if (fetchSite !== null) headers.set("sec-fetch-site", fetchSite);
+  return headers;
+};
+
+test("trusts the app's own <img> and <video> loads", () => {
+  assert.equal(isTrustedDesktopRequest(mediaGet("same-origin")), true);
+});
+
+test("trusts a URL the user typed into the address bar", () => {
+  assert.equal(isTrustedDesktopRequest(mediaGet("none")), true);
+});
+
+test("refuses an <img> or <video> load from another website, which carries no Origin", () => {
+  assert.equal(isTrustedDesktopRequest(mediaGet("cross-site")), false);
+});
+
+test("refuses a same-site request from another port or subdomain", () => {
+  assert.equal(isTrustedDesktopRequest(mediaGet("same-site")), false);
+});
+
+test("refuses a cross-site JSON request even when everything else looks right", () => {
+  assert.equal(isTrustedDesktopRequest(jsonPost({ "sec-fetch-site": "cross-site" })), false);
+});
+
+test("trusts the app's own JSON request when the browser sends Fetch Metadata", () => {
+  assert.equal(isTrustedDesktopRequest(jsonPost({ "sec-fetch-site": "same-origin" })), true);
+});

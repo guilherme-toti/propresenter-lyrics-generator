@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { searchLibrary } from "@/lib/propresenter/librarySearch";
+import type { ImportableFilesReply } from "@/lib/songSchema";
 
 const requestSchema = z.object({
   libraryFolder: z.string().min(1),
@@ -16,7 +17,7 @@ export async function POST(request: Request) {
 
   try {
     const files = await searchLibrary(parsed.data.libraryFolder, parsed.data.query);
-    return NextResponse.json({ files });
+    return NextResponse.json({ files } satisfies ImportableFilesReply);
   } catch (err) {
     console.error("library-search: searching library folders failed", err);
     return NextResponse.json({ error: "Não foi possível ler a pasta da Library." }, { status: 500 });

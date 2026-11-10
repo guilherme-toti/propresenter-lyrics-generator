@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { pingProPresenter } from "@/lib/propresenter/api";
+import { portSchema } from "@/lib/desktop/parsePort";
+import { pingProPresenter, proPresenterFailureMessage } from "@/lib/propresenter/api";
 
-const bodySchema = z.object({ port: z.number().int().min(1).max(65535) });
+const bodySchema = z.object({ port: portSchema });
 
 /** Backs the "Testar conexão" button in Ajustes. A failed connection is a
  * reportable result, not a request error, so it comes back 200 with ok:false. */
@@ -19,7 +20,9 @@ export async function POST(request: Request) {
   } catch (err) {
     return NextResponse.json({
       ok: false,
-      error: err instanceof Error ? err.message : "Falha ao conectar.",
+      error: proPresenterFailureMessage(err, "propresenter/ping",
+        "Não deu pra falar com o ProPresenter. Confira se ele está aberto e tente de novo.",
+      ),
     });
   }
 }

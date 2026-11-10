@@ -12,7 +12,7 @@ import {
   updateSectionLabel,
 } from "@/lib/alignment";
 import { createEmptySong, type AlignedLine, type Song, type SideAttribution, type SideSource } from "@/lib/types";
-import { storedSongSchema } from "@/lib/songSchema";
+import { storedSongSchema, type RealignedLyrics } from "@/lib/songSchema";
 
 interface LibraryState {
   song: Song | null;
@@ -34,10 +34,7 @@ interface LibraryState {
   /** `translatedSide`, when given, also marks that side's literalTranslation status "done" — used
    * by the on-demand literal-translation flow (see useAutoLiteralTranslation), not the manual
    * "Realinhar com IA" button. */
-  applyAiRealignment: (
-    result: { languageARaw: string; languageBRaw: string; alignment: AlignedLine[] },
-    translatedSide?: "languageA" | "languageB",
-  ) => void;
+  applyAiRealignment: (result: RealignedLyrics, translatedSide?: "languageA" | "languageB") => void;
   /** Marks a side's literal translation attempt as not-to-be-retried automatically (cancelled by
    * the user, or failed) — see useAutoLiteralTranslation. The user can still ask again via
    * "Traduzir com IA", which doesn't check this status. */
@@ -202,10 +199,12 @@ export const useLibraryStore = create<LibraryState>()(
       // persisted under the old version is discarded; the song is re-validated rather than trusted
       // as-is, so a stale/malformed entry falls back to null instead of crashing the app on render.
       migrate: (persistedState, version) => {
-        if (version < 1) return { song: null };
+        // `satisfies`: zustand takes the persisted type from this return, so without it a field
+        // `Song` gains (and the schema lacks) would still compile here.
+        if (version < 1) return { song: null } satisfies Pick<LibraryState, "song">;
         const candidate = persistedState as { song?: unknown } | undefined;
         const parsed = storedSongSchema.safeParse(candidate?.song);
-        return { song: parsed.success ? (parsed.data as Song) : null };
+        return { song: parsed.success ? parsed.data : null } satisfies Pick<LibraryState, "song">;
       },
     },
   ),

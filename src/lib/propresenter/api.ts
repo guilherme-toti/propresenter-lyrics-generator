@@ -94,10 +94,9 @@ export interface PlaylistTreeNode {
   children?: PlaylistTreeNode[];
 }
 
-export interface PlaylistRef {
-  id: string;
-  name: string;
-}
+import type { PlaylistRef } from "./contracts";
+
+export type { PlaylistRef };
 
 /**
  * Walks the tree `GET /v1/playlists` returns, collecting every leaf playlist a user could
@@ -127,6 +126,30 @@ const REQUEST_TIMEOUT_MS = 5_000;
 const INDEX_TIMEOUT_MS = 15_000;
 const INDEX_POLL_INTERVAL_MS = 500;
 
+/** Every failure from this client. `message` is written for the user and callers show it as-is;
+ * the technical detail goes to the server log instead. `status` is set when ProPresenter answered,
+ * so a caller can say something more specific than the shared 404 message (a macro that's gone). */
+export class ProPresenterError extends Error {
+  // A plain field, not a constructor parameter property: Node's type stripping can't run those.
+  readonly status: number | undefined;
+
+  constructor(message: string, status?: number) {
+    super(message);
+    this.name = "ProPresenterError";
+    this.status = status;
+  }
+}
+
+/** What a route shows for a failure from this client. Only a ProPresenterError's message is written
+ * for the user, and its detail is already logged. Anything else is a bug or an answer this client
+ * didn't expect (JSON of the wrong shape surfaces as a TypeError), whose message is technical
+ * English, so it's logged here and the route's plain message goes on screen instead. */
+export function proPresenterFailureMessage(err: unknown, route: string, fallbackMessage: string): string {
+  if (err instanceof ProPresenterError) return err.message;
+  console.error(`${route} failed`, err);
+  return fallbackMessage;
+}
+
 async function apiRequest(port: number, path: string, init?: RequestInit): Promise<Response> {
   let res: Response;
   try {
@@ -134,33 +157,41 @@ async function apiRequest(port: number, path: string, init?: RequestInit): Promi
       ...init,
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
-  } catch {
-    throw new Error(
+  } catch (err) {
+    // Closed and slow look the same on screen; the log tells them apart (ECONNREFUSED vs a timeout).
+    console.error(`ProPresenter didn't answer ${init?.method ?? "GET"} ${path}:`, err);
+    throw new ProPresenterError(
       "Não foi possível falar com o ProPresenter. Verifique se ele está aberto e se a rede está ativada nas preferências.",
     );
   }
   if (!res.ok) {
     // ProPresenter puts its deserializer's complaint in the body, and those messages are the only
-    // documentation of where its OpenAPI spec is wrong. Keep it: without it a future version
-    // tightening its PUT surfaces as a bare "respondeu 400" with the reason discarded.
+    // documentation of where its OpenAPI spec is wrong. Keep it in the log: without it a future
+    // version tightening its PUT shows up as a bare 400 with the reason discarded. The GET and PUT
+    // in appendToPlaylist share a path, so the method is what tells them apart.
     const detail = await res.text().catch(() => "");
-    const suffix = detail ? ` ${detail.slice(0, 200)}` : "";
-    // The GET and PUT in appendToPlaylist share a path; naming the method is what tells them apart
-    // when a user reports the message back.
-    const method = init?.method ?? "GET";
-    throw new Error(`O ProPresenter respondeu ${res.status} em ${method} ${path}.${suffix}`);
+    console.error(
+      `ProPresenter answered ${res.status} to ${init?.method ?? "GET"} ${path}: ${detail.slice(0, 200)}`,
+    );
+    throw new ProPresenterError(
+      res.status === 404
+        ? "O ProPresenter não achou o que o app pediu. Talvez tenha sido apagado ou renomeado; confira lá e tente de novo."
+        : "O ProPresenter não aceitou o pedido. Tente de novo; se continuar, reinicie o ProPresenter.",
+      res.status,
+    );
   }
   return res;
 }
 
-/** apiRequest + JSON parse. Kept together so a malformed body throws the same Portuguese error
- * shape as every other failure — callers surface `err.message` directly to the user. */
+/** apiRequest + JSON parse, so a malformed body fails with the same plain ProPresenterError as
+ * every other failure. */
 async function apiJson<T>(port: number, path: string, init?: RequestInit): Promise<T> {
   const res = await apiRequest(port, path, init);
   try {
     return (await res.json()) as T;
-  } catch {
-    throw new Error(`O ProPresenter devolveu uma resposta inválida em ${path}.`);
+  } catch (err) {
+    console.error(`ProPresenter sent a body that isn't JSON for ${init?.method ?? "GET"} ${path}:`, err);
+    throw new ProPresenterError("O ProPresenter respondeu algo que o app não entendeu. Tente de novo.");
   }
 }
 
@@ -269,6 +300,23 @@ export async function appendToPlaylist(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+/** Runs a macro exactly as its button in ProPresenter would, which puts it on the live output.
+ * Answers 204 with no body. */
+export async function triggerMacro(port: number, macroUuid: string): Promise<void> {
+  await apiRequest(port, `/v1/macro/${encodeURIComponent(macroUuid)}/trigger`);
+}
+
+/** The layers a macro's background and prop land on. */
+const MACRO_LAYERS = ["media", "props"] as const;
+
+/** Takes macro media off the screen. On Windows that also releases ProPresenter's hold on the
+ * files being shown, which is what lets them be replaced. */
+export async function clearMacroLayers(port: number): Promise<void> {
+  for (const layer of MACRO_LAYERS) {
+    await apiRequest(port, `/v1/clear/layer/${layer}`);
+  }
 }
 
 /** Backs playlist discovery: the flat list of playlists a user could export into, read

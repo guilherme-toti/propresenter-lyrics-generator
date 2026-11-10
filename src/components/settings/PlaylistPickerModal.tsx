@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { AlertCircle, RefreshCw } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
-import type { PlaylistRef } from "@/lib/desktopStore";
+import { Button } from "@/components/ui/Button";
+import type { PlaylistRef } from "@/lib/propresenter/contracts";
+import { usePlaylists } from "@/lib/desktop/usePlaylists";
 
 interface PlaylistPickerModalProps {
   open: boolean;
@@ -13,6 +15,48 @@ interface PlaylistPickerModalProps {
   description?: string;
 }
 
+/** Rendered inside the Modal, which mounts its children only while open, so every opening asks
+ * ProPresenter again instead of showing the list from last time. */
+function PlaylistChoices({ port, onPick }: { port: number; onPick: (playlist: PlaylistRef) => void }) {
+  const { playlists, error, loading, reload } = usePlaylists(port);
+
+  if (loading) return <p className="text-sm text-ink/60">Procurando playlists…</p>;
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="flex items-start gap-1.5 text-sm text-red-600">
+          <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
+          {error}
+        </p>
+        <Button variant="secondary" size="sm" onClick={reload}>
+          <RefreshCw size={13} aria-hidden />
+          Tentar de novo
+        </Button>
+      </div>
+    );
+  }
+
+  if (playlists.length === 0) {
+    return <p className="text-sm text-ink/60">Nenhuma playlist encontrada no ProPresenter.</p>;
+  }
+
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {playlists.map((playlist) => (
+        <li key={playlist.id}>
+          <button
+            onClick={() => onPick(playlist)}
+            className="w-full rounded-lg border border-line px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-ink/5"
+          >
+            {playlist.name}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 export function PlaylistPickerModal({
   open,
   port,
@@ -21,60 +65,21 @@ export function PlaylistPickerModal({
   title = "Escolher playlist",
   description,
 }: PlaylistPickerModalProps) {
-  const [playlists, setPlaylists] = useState<PlaylistRef[]>([]);
-  const [loading, setLoading] = useState(false);
-
-  useEffect(() => {
-    if (!open || !port) return;
-    let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- standard fetch-on-open loading kick-off
-    setLoading(true);
-    fetch("/api/playlists/list", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ port }),
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!cancelled) setPlaylists(Array.isArray(data.playlists) ? data.playlists : []);
-      })
-      .catch(() => {
-        if (!cancelled) setPlaylists([]);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, port]);
-
   return (
     <Modal open={open} onClose={onClose} title={title}>
       <div className="flex flex-col gap-3">
         {description && <p className="text-sm text-ink/60">{description}</p>}
-        {!port && (
+        {port ? (
+          <PlaylistChoices
+            port={port}
+            onPick={(playlist) => {
+              onSelect(playlist);
+              onClose();
+            }}
+          />
+        ) : (
           <p className="text-sm text-ink/60">Configure a porta do ProPresenter em Ajustes primeiro.</p>
         )}
-        {port && loading && <p className="text-sm text-ink/60">Procurando playlists…</p>}
-        {port && !loading && playlists.length === 0 && (
-          <p className="text-sm text-ink/60">Nenhuma playlist encontrada no ProPresenter.</p>
-        )}
-        <ul className="flex flex-col gap-1.5">
-          {playlists.map((playlist) => (
-            <li key={playlist.id}>
-              <button
-                onClick={() => {
-                  onSelect(playlist);
-                  onClose();
-                }}
-                className="w-full rounded-lg border border-line px-3 py-2 text-left text-sm text-ink transition-colors hover:bg-ink/5"
-              >
-                {playlist.name}
-              </button>
-            </li>
-          ))}
-        </ul>
       </div>
     </Modal>
   );

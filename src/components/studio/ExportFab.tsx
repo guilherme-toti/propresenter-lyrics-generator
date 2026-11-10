@@ -7,7 +7,9 @@ import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { ExportOverwriteModal } from "@/components/studio/ExportOverwriteModal";
+import { addToPlaylist, exportToLibraryFolder, findExportConflict } from "@/lib/desktop/api";
 import { playlistStillExists } from "@/lib/desktop/playlistStillExists";
+import { errorMessage, postForFile } from "@/lib/postJson";
 import type { ExportConflict } from "@/lib/propresenter/libraries";
 
 interface SavedInfo {
@@ -58,18 +60,13 @@ export function ExportFab({ song }: { song: Song }) {
     destinationFolder: string,
     overrides?: { fileName?: string; overwritePath?: string },
   ) => {
-    const res = await fetch("/api/export/propresenter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ song, destinationFolder, ...overrides }),
-    });
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) throw new Error(data.error ?? "Falha ao exportar.");
+    const savedTo = await exportToLibraryFolder({ song, destinationFolder, ...overrides });
 
-    // data.savedTo reflects the name actually written to disk, which can differ from what was
-    // asked for (writeUniqueFile appends " (2)" etc. on a coincidental collision) — copy that,
-    // not the requested name, so pasting into ProPresenter's search always finds the real file.
-    if (typeof data.savedTo === "string") copyToClipboard(baseNameWithoutExt(data.savedTo));
+    // savedTo is the name actually written to disk, which can differ from what was asked for
+    // (writeUniqueFile appends " (2)" etc. on a coincidental collision) — copy that, not the
+    // requested name, so pasting into ProPresenter's search always finds the real file.
+    const exportedName = baseNameWithoutExt(savedTo);
+    copyToClipboard(exportedName);
 
     // Best-effort: the file is already safely in the Library, so a failure here never fails the
     // export — it's reported to the user instead. Needs the API port configured (Ajustes) and
@@ -77,27 +74,21 @@ export function ExportFab({ song }: { song: Song }) {
     // writing the playlist document behind a running ProPresenter is invisible until restart.
     let addedToPlaylist = false;
     let playlistError: string | null = null;
-    const exportedName = typeof data.savedTo === "string" ? baseNameWithoutExt(data.savedTo) : null;
 
-    if (activePlaylist && exportedName) {
+    if (activePlaylist) {
       if (!proApiPort) {
         playlistError = "Configure a porta do ProPresenter em Ajustes para adicionar automaticamente.";
       } else {
         try {
-          const res = await fetch("/api/playlists/add-item", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              port: proApiPort,
-              playlistId: activePlaylist.id,
-              presentationName: exportedName,
-            }),
+          const result = await addToPlaylist({
+            port: proApiPort,
+            playlistId: activePlaylist.id,
+            presentationName: exportedName,
           });
-          const result = await res.json();
-          addedToPlaylist = Boolean(result?.added);
-          if (!addedToPlaylist) playlistError = result?.reason || "Falha ao adicionar à playlist.";
-        } catch {
-          playlistError = "Falha ao adicionar à playlist.";
+          addedToPlaylist = result.added;
+          if (!result.added) playlistError = result.reason;
+        } catch (err) {
+          playlistError = errorMessage(err);
         }
       }
     }
@@ -111,19 +102,8 @@ export function ExportFab({ song }: { song: Song }) {
   };
 
   const downloadFile = async () => {
-    const res = await fetch("/api/export/propresenter", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ song }),
-    });
-    if (!res.ok) {
-      const data = await res.json().catch(() => ({}));
-      throw new Error(data.error ?? "Falha ao exportar.");
-    }
-    const blob = await res.blob();
-    const disposition = res.headers.get("Content-Disposition") ?? "";
-    const match = /filename="?([^"]+)"?/.exec(disposition);
-    const filename = match ? decodeURIComponent(match[1]) : `${song.title || "musica"}.pro`;
+    const { blob, fileName } = await postForFile("/api/export/propresenter", { song });
+    const filename = fileName ?? `${song.title || "musica"}.pro`;
     copyToClipboard(baseNameWithoutExt(filename));
 
     const url = URL.createObjectURL(blob);
@@ -152,17 +132,8 @@ export function ExportFab({ song }: { song: Song }) {
           }
         }
 
-        // Never blocks the export on failure — an unreachable check just falls back to the
-        // existing, always-safe writeUniqueFile behavior (appends " (2)" instead of overwriting).
         const name = song.title || "Música sem título";
-        const found = await fetch("/api/export/check-conflict", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ libraryFolder, name }),
-        })
-          .then((res) => (res.ok ? res.json() : null))
-          .then((data) => (data?.conflict as ExportConflict | null) ?? null)
-          .catch(() => null);
+        const found = await findExportConflict(libraryFolder, name);
 
         if (found) {
           setStatus("idle");
@@ -177,7 +148,7 @@ export function ExportFab({ song }: { song: Song }) {
       }
       setStatus("idle");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao exportar.");
+      setError(errorMessage(err));
       setStatus("error");
     }
   };
@@ -190,7 +161,7 @@ export function ExportFab({ song }: { song: Song }) {
       await exportToLibrary(libraryFolder, { fileName: name, overwritePath: overwritePath ?? undefined });
       setConflict(null);
     } catch (err) {
-      setConflictError(err instanceof Error ? err.message : "Falha ao exportar.");
+      setConflictError(errorMessage(err));
     } finally {
       setConflictSaving(false);
     }
@@ -230,7 +201,7 @@ export function ExportFab({ song }: { song: Song }) {
             </p>
             {saved.playlistError && (
               <p className="mt-1 text-red-600">
-                Falha ao adicionar à playlist: {saved.playlistError}
+                Não deu pra adicionar à playlist. {saved.playlistError}
               </p>
             )}
           </div>

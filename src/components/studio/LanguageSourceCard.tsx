@@ -6,6 +6,8 @@ import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { CatalogSearch } from "@/components/studio/CatalogSearch";
+import { fetchRecordingLyrics } from "@/lib/lyricsApi";
+import { errorMessage } from "@/lib/postJson";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
 import type { TrackCandidate } from "@/lib/lyrics/musixmatch";
@@ -54,22 +56,16 @@ export function LanguageSourceCard({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/songs/lyrics", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ commontrackId: track.commontrackId }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Algo deu errado.");
+      const { text, copyright, trackingUrl } = await fetchRecordingLyrics(track.commontrackId);
       replaceSide(
         side,
-        data.text,
+        text,
         { commontrackId: track.commontrackId, title: track.title, artist: track.artist },
-        { copyright: data.copyright, trackingUrl: data.trackingUrl },
+        { copyright, trackingUrl },
       );
       setDialogOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Algo deu errado.");
+      setError(errorMessage(err));
     } finally {
       setLoading(false);
     }

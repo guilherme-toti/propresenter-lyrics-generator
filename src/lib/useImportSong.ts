@@ -1,34 +1,23 @@
 "use client";
 
 import { useState } from "react";
+import { errorMessage, postJsonAs } from "@/lib/postJson";
+import {
+  importableFilesReplySchema,
+  importedSongReplySchema,
+  type ImportableFile,
+} from "@/lib/songSchema";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
-import type { ImportableFile } from "@/lib/propresenter/libraries";
 
 export type { ImportableFile };
-
-async function postJson(url: string, body: unknown): Promise<Record<string, unknown>> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data: Record<string, unknown> = await res.json();
-  if (!res.ok) throw new Error(typeof data.error === "string" ? data.error : "Algo deu errado.");
-  return data;
-}
-
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : "Algo deu errado.";
-}
 
 /** Mirrors useGenerateSong.ts's shape — list()/search()/importFile() instead of search()/generate(),
  * same {error} convention on failure. */
 export function useImportSong() {
   const list = async (libraryFolder: string): Promise<{ files: ImportableFile[] } | { error: string }> => {
     try {
-      const data = await postJson("/api/songs/import-list", { libraryFolder });
-      return { files: (data.files ?? []) as ImportableFile[] };
+      return await postJsonAs("/api/songs/import-list", { libraryFolder }, importableFilesReplySchema);
     } catch (err) {
       return { error: errorMessage(err) };
     }
@@ -39,8 +28,7 @@ export function useImportSong() {
     query: string,
   ): Promise<{ files: ImportableFile[] } | { error: string }> => {
     try {
-      const data = await postJson("/api/songs/library-search", { libraryFolder, query });
-      return { files: (data.files ?? []) as ImportableFile[] };
+      return await postJsonAs("/api/songs/library-search", { libraryFolder, query }, importableFilesReplySchema);
     } catch (err) {
       return { error: errorMessage(err) };
     }
@@ -48,8 +36,8 @@ export function useImportSong() {
 
   const importFile = async (path: string): Promise<{ ok: true; song: Song } | { error: string }> => {
     try {
-      const data = await postJson("/api/songs/import", { path });
-      return { ok: true, song: data.song as Song };
+      const { song } = await postJsonAs("/api/songs/import", { path }, importedSongReplySchema);
+      return { ok: true, song };
     } catch (err) {
       return { error: errorMessage(err) };
     }

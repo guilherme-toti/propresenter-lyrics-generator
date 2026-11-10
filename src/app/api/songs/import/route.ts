@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import fs from "node:fs/promises";
 import { importSongFromProFile } from "@/lib/propresenter/importSong";
+import type { ImportedSongReply } from "@/lib/songSchema";
 import { createEmptySong } from "@/lib/types";
 
 const requestSchema = z.object({
@@ -25,7 +26,7 @@ export async function POST(request: Request) {
       languageB: imported.languageB,
       alignment: imported.alignment,
     });
-    return NextResponse.json({ song });
+    return NextResponse.json({ song } satisfies ImportedSongReply);
   } catch (error) {
     console.error("song import failed", error);
     return NextResponse.json(

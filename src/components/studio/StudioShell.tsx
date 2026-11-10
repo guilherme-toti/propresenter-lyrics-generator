@@ -22,7 +22,7 @@ function EmptyState({ onNewSong }: { onNewSong: () => void }) {
         Busque uma música e sua tradução, ou cole a letra em dois idiomas você mesmo — de qualquer forma você terá
         um alinhamento linha a linha pronto para exportar para o ProPresenter.
       </p>
-      <Button className="mt-2" onClick={onNewSong}>
+      <Button variant="secondary" className="mt-2" onClick={onNewSong}>
         <Search size={16} />
         Procurar música
       </Button>

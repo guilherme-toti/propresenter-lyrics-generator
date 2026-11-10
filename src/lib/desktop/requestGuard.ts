@@ -3,7 +3,7 @@
  * sends it without a preflight, so the route would act on it even though the page can't read
  * the reply. The app's own pages only ever send same-origin JSON, so anything else is refused. */
 export function isTrustedDesktopRequest(headers: Headers): boolean {
-  return isLoopbackHost(headers) && isSameOrigin(headers) && hasJsonBodyOrNone(headers);
+  return isLoopbackHost(headers) && isSameOrigin(headers) && isNotFromAnotherSite(headers) && hasJsonBodyOrNone(headers);
 }
 
 const LOOPBACK_HOSTNAMES = new Set(["127.0.0.1", "localhost", "[::1]"]);
@@ -35,6 +35,15 @@ function isSameOrigin(headers: Headers): boolean {
     // "null" (sandboxed iframes, file:// pages, no-referrer redirects) proves nothing.
     return false;
   }
+}
+
+/** An <img> or <video> on another website sends no Origin, so isSameOrigin lets it through, and
+ * the server listens on a fixed port any page can name. Browsers that send Fetch Metadata say where
+ * a request came from: only the app's own pages ("same-origin") and a URL typed by the user
+ * ("none") are let in. Without the header (curl, older webviews) the other checks still apply. */
+function isNotFromAnotherSite(headers: Headers): boolean {
+  const site = headers.get("sec-fetch-site");
+  return site === null || site === "same-origin" || site === "none";
 }
 
 function hasJsonBodyOrNone(headers: Headers): boolean {

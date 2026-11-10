@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
+import { findExportConflict } from "@/lib/desktop/api";
 import type { ExportConflict } from "@/lib/propresenter/libraries";
 
 const RECHECK_DELAY_MS = 500;
@@ -44,6 +45,9 @@ export function ExportOverwriteModal({
   const [conflict, setConflict] = useState<ExportConflict | null>(initialConflict);
   const [checking, setChecking] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Each keystroke takes a new number, so a check that finishes after the name changed again is
+  // dropped instead of warning about (or clearing the warning for) a name no longer typed.
+  const checkId = useRef(0);
 
   // Only clears a pending timer on unmount — never sets state itself, so this doesn't fall under
   // the "no setState in an effect body" rule the debounce below has to route around instead.
@@ -56,6 +60,7 @@ export function ExportOverwriteModal({
   const handleNameChange = (value: string) => {
     setName(value);
     if (timerRef.current) clearTimeout(timerRef.current);
+    const id = ++checkId.current;
 
     if (value.trim() === initialName.trim()) {
       // Back to the exact name that opened this dialog — the server already answered that one, no
@@ -67,15 +72,11 @@ export function ExportOverwriteModal({
 
     setChecking(true);
     timerRef.current = setTimeout(() => {
-      fetch("/api/export/check-conflict", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ libraryFolder, name: value }),
-      })
-        .then((res) => (res.ok ? res.json() : null))
-        .then((data) => setConflict(data?.conflict ?? null))
-        .catch(() => setConflict(null))
-        .finally(() => setChecking(false));
+      void findExportConflict(libraryFolder, value).then((found) => {
+        if (id !== checkId.current) return;
+        setConflict(found);
+        setChecking(false);
+      });
     }, RECHECK_DELAY_MS);
   };
 

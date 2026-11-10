@@ -1,17 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { ImportableFile } from "@/lib/songSchema";
+
+export type { ImportableFile };
 
 export interface LibraryDir {
   /** Folder name, e.g. "Louvor" — what the user actually recognizes as "the library". */
-  name: string;
-  path: string;
-}
-
-/** A .pro file in one of the user's libraries, as listed for import or found by a library search. */
-export interface ImportableFile {
-  library: string;
-  filename: string;
-  /** The filename without ".pro" — what lists show, so "É Ele (2)" stays tellable from "É Ele". */
   name: string;
   path: string;
 }

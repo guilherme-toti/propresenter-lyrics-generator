@@ -1,16 +1,12 @@
+import { fetchPlaylists } from "@/lib/desktop/api";
+
+/** True unless ProPresenter answered with a list that lacks the playlist. Not being able to ask
+ * (the request failed, or ProPresenter couldn't be reached and the route said so in `error`) is no
+ * proof the playlist is gone, and must not silently clear the user's selection. */
 export async function playlistStillExists(port: number, playlistId: string): Promise<boolean> {
   try {
-    const res = await fetch("/api/playlists/list", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ port }),
-    });
-    if (!res.ok) return true; // request failure isn't proof the playlist is gone — don't block on it
-    const data = await res.json();
-    // An unreachable ProPresenter reports its own failure via `error` (see /api/playlists/list) —
-    // that isn't proof the playlist is gone either, and must not silently clear the user's selection.
-    if (data.error) return true;
-    const playlists: { id: string }[] = Array.isArray(data.playlists) ? data.playlists : [];
+    const { playlists, error } = await fetchPlaylists(port);
+    if (error) return true;
     return playlists.some((p) => p.id === playlistId);
   } catch {
     return true;

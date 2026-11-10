@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { listPlaylists } from "@/lib/propresenter/api";
+import { portSchema } from "@/lib/desktop/parsePort";
+import { listPlaylists, proPresenterFailureMessage } from "@/lib/propresenter/api";
 
 const bodySchema = z.object({
-  port: z.number().int().min(1).max(65535),
+  port: portSchema,
 });
 
 /** Lists the playlists a user could export into, read from ProPresenter's
@@ -27,7 +28,7 @@ export async function POST(request: Request) {
   } catch (err) {
     return NextResponse.json({
       playlists: [],
-      error: err instanceof Error ? err.message : "Falha ao listar playlists.",
+      error: proPresenterFailureMessage(err, "playlists/list", "Não deu pra carregar as playlists do ProPresenter."),
     });
   }
 }

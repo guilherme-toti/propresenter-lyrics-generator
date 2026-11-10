@@ -2,19 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { isDesktopApp } from "@/lib/tauri/env";
-import { useDesktopStore, type PlaylistRef } from "@/lib/desktopStore";
+import { useDesktopStore } from "@/lib/desktopStore";
+import type { PlaylistRef } from "@/lib/propresenter/contracts";
+import { fetchPlaylists } from "@/lib/desktop/api";
 
-async function fetchPlaylists(port: number): Promise<PlaylistRef[]> {
+/** An empty list when ProPresenter can't be asked: that's no news about its playlists, and the
+ * next focus asks again. */
+async function readPlaylistsQuietly(port: number): Promise<PlaylistRef[]> {
   try {
-    const res = await fetch("/api/playlists/list", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ port }),
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (data.error) return [];
-    return Array.isArray(data.playlists) ? data.playlists : [];
+    const { playlists, error } = await fetchPlaylists(port);
+    return error ? [] : playlists;
   } catch {
     return [];
   }
@@ -48,7 +45,7 @@ export function usePlaylistWatcher() {
     let cancelled = false;
 
     const check = async () => {
-      const playlists = await fetchPlaylists(proApiPort);
+      const playlists = await readPlaylistsQuietly(proApiPort);
       if (cancelled || playlists.length === 0) return;
 
       // Read fresh state directly from the store instead of React state, so

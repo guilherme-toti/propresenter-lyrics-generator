@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { postJsonAs } from "@/lib/postJson";
+import { realignedLyricsReplySchema } from "@/lib/songSchema";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
 
@@ -45,19 +47,17 @@ export function useAutoLiteralTranslation(song: Song | null) {
     async function run() {
       setTranslating({ songId, side });
       try {
-        const res = await fetch("/api/translate-literally", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
+        const translated = await postJsonAs(
+          "/api/translate-literally",
+          {
             knownSide: side === "languageA" ? "languageB" : "languageA",
             knownText,
             targetLanguage: targetLanguageFor(side),
-          }),
-          signal: controller.signal,
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? "Algo deu errado.");
-        applyAiRealignment(data, side);
+          },
+          realignedLyricsReplySchema,
+          { signal: controller.signal },
+        );
+        applyAiRealignment(translated, side);
       } catch (err) {
         // AbortError means cancel() already marked this "skipped" — don't do it twice.
         if (!(err instanceof DOMException && err.name === "AbortError")) {

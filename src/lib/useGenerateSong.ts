@@ -1,7 +1,8 @@
 "use client";
 
 import { useLibraryStore } from "@/lib/store";
-import type { Song } from "@/lib/types";
+import { errorMessage, postJsonAs } from "@/lib/postJson";
+import { generatedSongReplySchema, trackSearchReplySchema } from "@/lib/songSchema";
 import type { TrackCandidate } from "@/lib/lyrics/musixmatch";
 
 const MIN_QUERY_LENGTH = 2;
@@ -29,34 +30,19 @@ export function useGenerateSong() {
       return { error: "Digite o título de uma música ou um trecho da letra." };
     }
     try {
-      const res = await fetch("/api/songs/search", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: trimmed }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Algo deu errado.");
-      return { results: data.results ?? [] };
+      return await postJsonAs("/api/songs/search", { query: trimmed }, trackSearchReplySchema);
     } catch (err) {
-      return { error: err instanceof Error ? err.message : "Algo deu errado." };
+      return { error: errorMessage(err) };
     }
   };
 
   const generate = async (picked: TrackCandidate): Promise<{ ok: true } | { error: string }> => {
     try {
-      const res = await fetch("/api/generate-song", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ picked }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? "Algo deu errado.");
-      }
-      startSong(data.song as Song);
+      const { song } = await postJsonAs("/api/generate-song", { picked }, generatedSongReplySchema);
+      startSong(song);
       return { ok: true };
     } catch (err) {
-      return { error: err instanceof Error ? err.message : "Algo deu errado." };
+      return { error: errorMessage(err) };
     }
   };
 

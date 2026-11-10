@@ -2,11 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
+import { AlertCircle } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
 import { useDesktopStore } from "@/lib/desktopStore";
+import { readMaskedApiKey, saveApiKey, testProPresenterConnection } from "@/lib/desktop/api";
 import { parsePort } from "@/lib/desktop/parsePort";
+import { checkProPresenterFolder } from "@/lib/backgrounds/api";
+import { useDetectProPresenterFolder } from "@/lib/backgrounds/useDetectProPresenterFolder";
+import { errorMessage } from "@/lib/postJson";
 import { PlaylistPickerModal } from "./PlaylistPickerModal";
 
 interface SettingsDialogProps {
@@ -18,11 +23,15 @@ function FolderRow({
   label,
   description,
   value,
+  emptyLabel = "Nenhuma pasta selecionada",
+  error,
   onPick,
 }: {
   label: string;
   description: string;
   value: string | null;
+  emptyLabel?: string;
+  error?: string | null;
   onPick: () => void;
 }) {
   return (
@@ -31,13 +40,56 @@ function FolderRow({
       <p className="mb-2 text-xs text-ink/60">{description}</p>
       <div className="flex items-center gap-2">
         <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
-          {value ?? "Nenhuma pasta selecionada"}
+          {value ?? emptyLabel}
         </span>
         <Button variant="secondary" size="sm" onClick={onPick}>
           Escolher
         </Button>
       </div>
+      {error && (
+        <p className="mt-2 flex items-start gap-1.5 text-xs text-red-600">
+          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+          {error}
+        </p>
+      )}
     </section>
+  );
+}
+
+/** Filled in by itself when ProPresenter lists its workspace; a folder picked by hand is checked
+ * before it's saved, so the Backgrounds screen never starts from a folder without macros. */
+function ProPresenterFolderRow() {
+  const folder = useDesktopStore((s) => s.proPresenterFolder);
+  const setFolder = useDesktopStore((s) => s.setProPresenterFolder);
+  const detecting = useDetectProPresenterFolder();
+  const [error, setError] = useState<string | null>(null);
+
+  const pick = async () => {
+    const picked = await open({
+      directory: true,
+      multiple: false,
+      title: "Pasta do ProPresenter",
+      defaultPath: folder ?? undefined,
+    });
+    if (typeof picked !== "string") return;
+    try {
+      const problem = await checkProPresenterFolder({ folder: picked });
+      setError(problem);
+      if (!problem) setFolder(picked);
+    } catch (err) {
+      setError(errorMessage(err));
+    }
+  };
+
+  return (
+    <FolderRow
+      label="Pasta do ProPresenter"
+      description="Onde ficam as macros e as mídias. A tela Backgrounds troca os arquivos daqui."
+      value={folder}
+      emptyLabel={detecting ? "Procurando…" : undefined}
+      error={error}
+      onPick={pick}
+    />
   );
 }
 
@@ -76,19 +128,14 @@ function ProApiPortRow() {
     setTesting(true);
     setResult(null);
     try {
-      const res = await fetch("/api/propresenter/ping", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ port }),
-      });
-      const data = await res.json();
+      const reply = await testProPresenterConnection(port);
       setResult(
-        data.ok
-          ? { ok: true, message: `Conectado: ${data.hostDescription} em ${data.name}` }
-          : { ok: false, message: data.error ?? "Falha ao conectar." },
+        reply.ok
+          ? { ok: true, message: `Conectado: ${reply.hostDescription} em ${reply.name}` }
+          : { ok: false, message: reply.error },
       );
-    } catch {
-      setResult({ ok: false, message: "Falha ao conectar." });
+    } catch (err) {
+      setResult({ ok: false, message: errorMessage(err) });
     } finally {
       setTesting(false);
     }
@@ -183,16 +230,11 @@ function ApiKeyRow({
   useEffect(() => {
     if (!isOpen) return;
     let cancelled = false;
-    fetch(endpoint)
-      .then((res) => (res.ok ? res.json() : { masked: null }))
-      .then((data) => {
+    readMaskedApiKey(endpoint)
+      .catch(() => null)
+      .then((current) => {
         if (cancelled) return;
-        setMasked(data.masked ?? null);
-        setLoaded(true);
-      })
-      .catch(() => {
-        if (cancelled) return;
-        setMasked(null);
+        setMasked(current);
         setLoaded(true);
       });
     return () => {
@@ -220,18 +262,11 @@ function ApiKeyRow({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ apiKey: value.trim() }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Algo deu errado.");
-      setMasked(data.masked ?? null);
+      setMasked(await saveApiKey(endpoint, value.trim()));
       setValue("");
       setEditing(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Algo deu errado.");
+      setError(errorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -292,7 +327,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
       <Modal open={isOpen} onClose={onClose} title="Ajustes">
         <div className="flex flex-col gap-5">
           <section>
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Chaves de API</h3>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Chaves dos serviços</h3>
             <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
               <ApiKeyRow
                 isOpen={isOpen}
@@ -321,6 +356,8 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                 value={libraryFolder}
                 onPick={pickLibraryFolder}
               />
+
+              <ProPresenterFolderRow />
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <ProApiPortRow />
