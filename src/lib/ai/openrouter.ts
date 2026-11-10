@@ -7,6 +7,7 @@ import {
   type AiRealignResponse,
   type AiSongResponse,
 } from "./schema";
+import { FAILURE_MESSAGES, failureForStatus } from "./openrouterFailure";
 import { fillBlankRepeats, restoreDroppedLines } from "@/lib/alignment";
 import {
   fetchLyricsByTrackId,
@@ -111,7 +112,8 @@ function extractJson(text: string): unknown {
 
 export class OpenRouterConfigError extends Error {}
 export class OpenRouterResponseError extends Error {}
-/** The model doesn't actually know this song — the user needs to paste the lyrics themselves. */
+/** The picked recording gave no lyrics to build a song from — the user needs another recording,
+ * or to paste the lyrics themselves. */
 export class OpenRouterUnknownSongError extends Error {}
 
 const UNKNOWN_SONG_MESSAGE =
@@ -131,20 +133,17 @@ function malformedResponse(context: string, error: unknown): OpenRouterResponseE
   );
 }
 
-/** A real song has more lines than this; a refusal or a "please paste the lyrics" reply has fewer. */
+/** A real song has at least this many lines. */
 const MIN_TOTAL_LINES = 4;
-/** A lyric line is short enough to fit on a slide. Prose addressed to the user is far longer. */
+/** A lyric line is short enough to fit on a slide; a paragraph of prose is far longer. */
 const MAX_LINE_LENGTH = 160;
 
 /**
- * Rejects a "song" that is really the model talking to the user rather than reproducing lyrics.
- *
- * Asked for a song it didn't know, a model answered "Preciso da letra oficial completa […] Pode
- * colar a letra completa aqui?" — which is a perfectly schema-valid AiSongResponse, so it was
- * saved and displayed as the song's lyrics. Zod checks the shape of a response; nothing checked
- * that it was lyrics at all. These two structural signals catch that without keyword-matching in
- * either language: such replies are one or two entries long, and each is a paragraph rather than
- * a line meant for a slide.
+ * Whether sections are shaped like lyrics to build slides from, judged by structure alone so it
+ * needs no keyword-matching in either language. Nothing on generateSongWithAi()'s path is written
+ * by a model, so what this checks is Musixmatch's text: the picked recording's lyrics, where a
+ * failure stops generation, and their pairing with Musixmatch's translation, where a failure
+ * leaves the other side blank instead.
  */
 function looksLikeLyrics(sections: AiSongResponse["sections"]): boolean {
   const lines = sections.flatMap((section) => section.lines);
@@ -159,7 +158,8 @@ function assertLooksLikeLyrics(song: AiSongResponse): void {
   }
 }
 
-/** Used only for the language-identification call — small, fast, cheap; no translation quality at stake. */
+/** Used only for the two classification calls — a song's language and an import's ambiguous lines —
+ * small, fast, cheap; no translation quality at stake. */
 const LANGUAGE_ONLY_MODEL = "openai/gpt-4o-mini";
 
 async function callOpenRouter(
@@ -199,13 +199,17 @@ async function callOpenRouter(
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
-    throw new OpenRouterResponseError(`A requisição ao OpenRouter falhou (${res.status}): ${body.slice(0, 500)}`);
+    console.error(`openrouter responded ${res.status}`, body);
+    throw new OpenRouterResponseError(FAILURE_MESSAGES[failureForStatus(res.status)]);
   }
 
   const payload = await res.json();
   const content: string | undefined = payload?.choices?.[0]?.message?.content;
   if (!content) {
-    throw new OpenRouterResponseError("O OpenRouter retornou uma resposta vazia.");
+    // OpenRouter answers 200 once a provider has accepted the request, so a failure after that
+    // arrives as an `error` object in place of `choices` — the payload is where to read it.
+    console.error("openrouter returned no message content", JSON.stringify(payload));
+    throw new OpenRouterResponseError(FAILURE_MESSAGES.unavailable);
   }
 
   return extractJson(content);
@@ -224,7 +228,7 @@ export interface GeneratedSong {
   /**
    * Attribution for the "translation" side's content, when it came from Musixmatch's own
    * translation of the same recording — never a distinct SideSource, since it isn't a separate
-   * recording (see translateKnownLyrics). Null when that side is blank instead.
+   * recording. Null when that side is blank instead.
    */
   translationAttribution: SideAttribution | null;
 }
@@ -320,7 +324,8 @@ function finalizeSong(
  * available, Musixmatch's own translation of the same recording (paired locally, no AI involved).
  * The one AI call left is identifyLanguageOnly(), and only when the catalogue didn't already say
  * what language this is. When no usable translation is found, the translation side is left blank
- * for the user to fill in by hand (or, later, by picking a different recording for that side).
+ * for the user to fill: by hand, by picking another recording for that side, or with "Traduzir com
+ * IA" (translateLiterally).
  */
 export async function generateSongWithAi(picked: TrackCandidate): Promise<GeneratedSong> {
   const original = await fetchLyricsByTrackId(picked.commontrackId);
