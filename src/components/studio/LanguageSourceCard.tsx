@@ -5,6 +5,7 @@ import { Search } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { CatalogSearch } from "@/components/studio/CatalogSearch";
 import { fetchRecordingLyrics } from "@/lib/lyricsApi";
 import { errorMessage } from "@/lib/postJson";
@@ -101,7 +102,7 @@ export function LanguageSourceCard({
             depois de trocar, realinhe manualmente.
           </p>
           {loading && <p className="text-sm text-ink/50">Buscando letra…</p>}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <InlineMessage tone="error">{error}</InlineMessage>}
           <CatalogSearch onPick={(track) => void handlePick(track)} autoFocus={false} />
         </div>
       </Modal>

@@ -5,6 +5,7 @@ import { Loader2, RefreshCw, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { TextArea } from "@/components/ui/Field";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { splitIntoBlocks } from "@/lib/alignment";
 import { realignLyrics } from "@/lib/lyricsApi";
 import { errorMessage } from "@/lib/postJson";
@@ -184,7 +185,7 @@ export function LyricsEditors({
             </Button>
           )}
         </div>
-        {aiError && <p className="text-xs text-red-600">{aiError}</p>}
+        {aiError && <InlineMessage tone="error">{aiError}</InlineMessage>}
       </div>
     </div>
   );

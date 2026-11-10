@@ -5,6 +5,7 @@ import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { findExportConflict } from "@/lib/desktop/api";
 import type { ExportConflict } from "@/lib/propresenter/libraries";
 
@@ -104,7 +105,7 @@ export function ExportOverwriteModal({
           </p>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <InlineMessage tone="error">{error}</InlineMessage>}
 
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} disabled={saving}>

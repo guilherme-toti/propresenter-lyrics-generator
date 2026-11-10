@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import type { PlaylistRef } from "@/lib/propresenter/contracts";
 import { usePlaylists } from "@/lib/desktop/usePlaylists";
 
@@ -25,10 +26,7 @@ function PlaylistChoices({ port, onPick }: { port: number; onPick: (playlist: Pl
   if (error) {
     return (
       <div className="flex flex-col items-start gap-2">
-        <p className="flex items-start gap-1.5 text-sm text-red-600">
-          <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
-          {error}
-        </p>
+        <InlineMessage tone="error">{error}</InlineMessage>
         <Button variant="secondary" size="sm" onClick={reload}>
           <RefreshCw size={13} aria-hidden />
           Tentar de novo

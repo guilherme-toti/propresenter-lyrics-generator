@@ -30,5 +30,5 @@ export const TextArea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 TextArea.displayName = "TextArea";
 
 export function Label({ className, ...props }: React.LabelHTMLAttributes<HTMLLabelElement>) {
-  return <label className={cn("mb-1.5 block text-xs font-medium text-ink/60", className)} {...props} />;
+  return <label className={cn("mb-1.5 block text-sm font-medium text-ink/60", className)} {...props} />;
 }

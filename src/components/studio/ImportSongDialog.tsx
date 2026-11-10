@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Input, Label } from "@/components/ui/Field";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { PickRow } from "@/components/ui/PickRow";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { useImportSong, useOpenLibraryFile, type ImportableFile } from "@/lib/useImportSong";
@@ -77,7 +78,7 @@ function ImportSongPicker({ onClose }: { onClose: () => void }) {
           Procurando arquivos…
         </p>
       )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && <InlineMessage tone="error">{error}</InlineMessage>}
       {!loading && files.length === 0 && !listError && <p className="text-sm text-ink/55">Nenhum arquivo .pro encontrado.</p>}
       {!loading && files.length > 0 && filtered.length === 0 && (
         <p className="text-sm text-ink/55">Nada encontrado com esse filtro.</p>

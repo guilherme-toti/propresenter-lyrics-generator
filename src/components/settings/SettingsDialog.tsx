@@ -2,10 +2,10 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { readMaskedApiKey, saveApiKey, testProPresenterConnection } from "@/lib/desktop/api";
 import { parsePort } from "@/lib/desktop/parsePort";
@@ -20,29 +20,52 @@ interface SettingsDialogProps {
   onClose: () => void;
 }
 
-/** A row's outcome. The icon says which kind it is, so the red never carries it alone. */
-function RowMessage({
-  tone,
-  className,
-  children,
+/**
+ * One setting: what it is, its control, then anything said about it. Each part takes its own row of
+ * a subgrid, so inside a PairedSettings grid the two controls stay level however the descriptions
+ * wrap, and a message under one never pushes the other one down.
+ */
+function SettingRow({
+  title,
+  description,
+  control,
+  footer,
 }: {
-  tone: "success" | "error";
-  className?: string;
-  children: ReactNode;
+  title: string;
+  description: string;
+  control: ReactNode;
+  footer?: ReactNode;
 }) {
-  const Icon = tone === "success" ? CheckCircle2 : AlertCircle;
   return (
-    <p
-      role={tone === "error" ? "alert" : "status"}
-      className={cn(
-        "flex items-start gap-1.5 text-sm",
-        tone === "success" ? "text-ink/70" : "text-red-600",
-        className,
-      )}
-    >
-      <Icon size={16} aria-hidden className="mt-0.5 shrink-0" />
+    // grid-cols-1 is minmax(0, 1fr): without it the column sizes to its content, so a long folder
+    // path or playlist name widens the row and pushes its button out of the dialog.
+    <section className="row-span-3 grid grid-cols-1 grid-rows-subgrid">
+      <div>
+        <h4 className="mb-1 text-sm font-semibold text-ink">{title}</h4>
+        <p className="mb-2 text-sm text-ink/60">{description}</p>
+      </div>
+      {control}
+      <div>{footer}</div>
+    </section>
+  );
+}
+
+/** The window is never narrower than 960px (min_inner_size in src-tauri/src/lib.rs), so a pair
+ * always has room to sit side by side. */
+function PairedSettings({ className, children }: { className?: string; children: ReactNode }) {
+  return <div className={cn("grid grid-cols-2 gap-x-4", className)}>{children}</div>;
+}
+
+/** A saved value and the button that changes it. The box has Input's padding and text size, so it
+ * is exactly as tall as an input in the setting beside it. */
+function ValueControl({ value, children }: { value: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-2">
+      <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink/70">
+        {value}
+      </span>
       {children}
-    </p>
+    </div>
   );
 }
 
@@ -62,23 +85,24 @@ function FolderRow({
   onPick: () => void;
 }) {
   return (
-    <section>
-      <h4 className="mb-1 text-sm font-semibold text-ink">{label}</h4>
-      <p className="mb-2 text-xs text-ink/60">{description}</p>
-      <div className="flex items-center gap-2">
-        <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
-          {value ?? emptyLabel}
-        </span>
-        <Button variant="secondary" size="sm" onClick={onPick}>
-          Escolher
-        </Button>
-      </div>
-      {error && (
-        <RowMessage tone="error" className="mt-2">
-          {error}
-        </RowMessage>
-      )}
-    </section>
+    <SettingRow
+      title={label}
+      description={description}
+      control={
+        <ValueControl value={value ?? emptyLabel}>
+          <Button variant="secondary" size="sm" onClick={onPick}>
+            Escolher
+          </Button>
+        </ValueControl>
+      }
+      footer={
+        error && (
+          <InlineMessage tone="error" className="mt-2">
+            {error}
+          </InlineMessage>
+        )
+      }
+    />
   );
 }
 
@@ -168,42 +192,40 @@ function ProApiPortRow() {
   };
 
   return (
-    <section>
-      <h4 className="mb-1 text-sm font-semibold text-ink">Porta do ProPresenter</h4>
-      <p className="mb-2 text-xs text-ink/60">
-        Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem ela, nada é
-        adicionado à playlist.
-      </p>
-      {/* items-stretch, not items-center: Input is py-2/text-sm and Button size="sm" is
-          py-1.5/text-xs, so centring leaves the button visibly shorter than the field beside it.
-          Stretching matches their heights without hardcoding one. */}
-      <div className="flex items-stretch gap-2">
-        {/* text-xs overrides Input's own text-sm: every other value field in this dialog is a
-            text-xs span, and the 4px line-height difference otherwise makes this row — and the
-            button stretched to it — visibly taller than the playlist row beside it. */}
-        <Input
-          className="flex-1 text-xs"
-          inputMode="numeric"
-          placeholder="ex.: 62830"
-          value={value}
-          onChange={(e) => save(e.target.value)}
-        />
-        <Button variant="secondary" size="sm" onClick={test} disabled={testing}>
-          {testing ? "Testando…" : "Testar conexão"}
-        </Button>
-      </div>
-      {invalidInput ? (
-        <RowMessage tone="error" className="mt-2">
-          Porta inválida. Use um número entre 1 e 65535.
-        </RowMessage>
-      ) : (
-        result && (
-          <RowMessage tone={result.ok ? "success" : "error"} className="mt-2">
-            {result.message}
-          </RowMessage>
+    <SettingRow
+      title="Porta do ProPresenter"
+      description="Ative Preferências → Rede no ProPresenter e informe a porta mostrada lá. Sem ela, nada é adicionado à playlist."
+      control={
+        // items-stretch, not items-center: Button size="sm" is shorter than the Input, so centring
+        // would leave "Testar conexão" visibly smaller than the field beside it. Stretching matches
+        // their heights without hardcoding one.
+        <div className="flex items-stretch gap-2">
+          <Input
+            className="flex-1"
+            inputMode="numeric"
+            placeholder="ex.: 62830"
+            value={value}
+            onChange={(e) => save(e.target.value)}
+          />
+          <Button variant="secondary" size="sm" onClick={test} disabled={testing}>
+            {testing ? "Testando…" : "Testar conexão"}
+          </Button>
+        </div>
+      }
+      footer={
+        invalidInput ? (
+          <InlineMessage tone="error" className="mt-2">
+            Porta inválida. Use um número entre 1 e 65535.
+          </InlineMessage>
+        ) : (
+          result && (
+            <InlineMessage tone={result.ok ? "success" : "error"} className="mt-2">
+              {result.message}
+            </InlineMessage>
+          )
         )
-      )}
-    </section>
+      }
+    />
   );
 }
 
@@ -212,20 +234,17 @@ function PlaylistRow({ onPick }: { onPick: () => void }) {
   const proApiPort = useDesktopStore((s) => s.proApiPort);
 
   return (
-    <section>
-      <h4 className="mb-1 text-sm font-semibold text-ink">Playlist de destino</h4>
-      <p className="mb-2 text-xs text-ink/60">
-        Playlist onde a música exportada é adicionada automaticamente (requer a porta do ProPresenter configurada).
-      </p>
-      <div className="flex items-center gap-2">
-        <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
-          {activePlaylist?.name ?? "Nenhuma selecionada"}
-        </span>
-        <Button variant="secondary" size="sm" disabled={!proApiPort} onClick={onPick}>
-          Trocar
-        </Button>
-      </div>
-    </section>
+    <SettingRow
+      title="Playlist de destino"
+      description="Playlist onde a música exportada é adicionada automaticamente (requer a porta do ProPresenter configurada)."
+      control={
+        <ValueControl value={activePlaylist?.name ?? "Nenhuma selecionada"}>
+          <Button variant="secondary" size="sm" disabled={!proApiPort} onClick={onPick}>
+            Trocar
+          </Button>
+        </ValueControl>
+      }
+    />
   );
 }
 
@@ -301,11 +320,11 @@ function ApiKeyRow({
   };
 
   return (
-    <section>
-      <h4 className="mb-1 text-sm font-semibold text-ink">{title}</h4>
-      <p className="mb-2 text-xs text-ink/60">{description}</p>
-      {editing ? (
-        <div className="flex flex-col gap-2">
+    <SettingRow
+      title={title}
+      description={description}
+      control={
+        editing ? (
           <Input
             type="password"
             autoFocus
@@ -314,27 +333,30 @@ function ApiKeyRow({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && save()}
           />
-          {error && <RowMessage tone="error">{error}</RowMessage>}
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={cancelEditing} disabled={saving}>
-              Cancelar
+        ) : (
+          <ValueControl value={!loaded ? "Carregando…" : (masked ?? "Nenhuma chave configurada")}>
+            <Button variant="secondary" size="sm" onClick={startEditing}>
+              {masked ? "Alterar" : "Configurar"}
             </Button>
-            <Button variant="primary" size="sm" onClick={save} disabled={saving}>
-              {saving ? "Salvando…" : "Salvar"}
-            </Button>
+          </ValueControl>
+        )
+      }
+      footer={
+        editing && (
+          <div className="mt-2 flex flex-col gap-2">
+            {error && <InlineMessage tone="error">{error}</InlineMessage>}
+            <div className="flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={cancelEditing} disabled={saving}>
+                Cancelar
+              </Button>
+              <Button variant="primary" size="sm" onClick={save} disabled={saving}>
+                {saving ? "Salvando…" : "Salvar"}
+              </Button>
+            </div>
           </div>
-        </div>
-      ) : (
-        <div className="flex items-center gap-2">
-          <span className="flex-1 truncate rounded-lg border border-line bg-white px-3 py-2 text-xs text-ink/70">
-            {!loaded ? "Carregando…" : (masked ?? "Nenhuma chave configurada")}
-          </span>
-          <Button variant="secondary" size="sm" onClick={startEditing}>
-            {masked ? "Alterar" : "Configurar"}
-          </Button>
-        </div>
-      )}
-    </section>
+        )
+      }
+    />
   );
 }
 
@@ -356,7 +378,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
         <div className="flex flex-col gap-5">
           <section>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-ink/50">Chaves dos serviços</h3>
-            <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <PairedSettings className="mt-3">
               <ApiKeyRow
                 isOpen={isOpen}
                 endpoint="/api/settings/api-key"
@@ -372,7 +394,7 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
                 description="Usada pra buscar a letra oficial no catálogo."
                 placeholder="Cole a chave da Musixmatch"
               />
-            </div>
+            </PairedSettings>
           </section>
 
           <section>
@@ -387,10 +409,10 @@ export function SettingsDialog({ open: isOpen, onClose }: SettingsDialogProps) {
 
               <ProPresenterFolderRow />
 
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <PairedSettings>
                 <ProApiPortRow />
                 <PlaylistRow onPick={() => setPickerOpen(true)} />
-              </div>
+              </PairedSettings>
             </div>
           </section>
         </div>

@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, FolderSearch, Loader2, Send, Settings, X } from "lucide-react";
+import { useEffect, useState } from "react";
+import { FolderSearch, Loader2, Send, Settings } from "lucide-react";
 import type { Song } from "@/lib/types";
 import { useDesktopStore } from "@/lib/desktopStore";
 import { useAppShellActions } from "@/components/layout/AppShell";
-import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { ExportOverwriteModal } from "@/components/studio/ExportOverwriteModal";
 import { Button } from "@/components/ui/Button";
@@ -36,29 +36,11 @@ function copyToClipboard(text: string) {
   navigator.clipboard?.writeText(text).catch(() => {});
 }
 
-/** A notice stacked over the export button; its icon says what kind it is. */
-function Notice({ icon, onDismiss, children }: { icon: ReactNode; onDismiss: () => void; children: ReactNode }) {
-  return (
-    <div
-      role="status"
-      className="flex w-full max-w-sm items-start gap-2 rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink shadow-lg"
-    >
-      {icon}
-      <div className="min-w-0 flex-1">{children}</div>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Fechar aviso"
-        className="shrink-0 rounded-full p-0.5 text-ink/40 transition-colors hover:bg-ink/5 hover:text-ink"
-      >
-        <X size={14} />
-      </button>
-    </div>
-  );
-}
+/** Notices stack over the export button, so they float as cards above the page. */
+const NOTICE_CLASSES = "w-full max-w-sm shadow-lg";
 
 export function ExportFab({ song }: { song: Song }) {
-  const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedInfo | null>(null);
   const [askedForFolder, setAskedForFolder] = useState(false);
@@ -133,13 +115,12 @@ export function ExportFab({ song }: { song: Song }) {
     setAskedForFolder(!libraryFolder);
     if (!libraryFolder) return;
 
-    setStatus("loading");
+    setLoading(true);
     try {
       if (activePlaylist && proApiPort) {
         const stillThere = await playlistStillExists(proApiPort, activePlaylist.id);
         if (!stillThere) {
           setActivePlaylist(null);
-          setStatus("idle");
           setPickerOpen(true);
           return;
         }
@@ -149,17 +130,16 @@ export function ExportFab({ song }: { song: Song }) {
       const found = await findExportConflict(libraryFolder, name);
 
       if (found) {
-        setStatus("idle");
         setConflictError(null);
         setConflict({ name, found });
         return;
       }
 
       await exportToLibrary(libraryFolder);
-      setStatus("idle");
     } catch (err) {
       setError(errorMessage(err));
-      setStatus("error");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -181,8 +161,11 @@ export function ExportFab({ song }: { song: Song }) {
     <div className="fixed bottom-6 right-10 z-40 flex flex-col items-end gap-2">
       {/* Gone by itself once a folder is chosen in Ajustes. */}
       {askedForFolder && !libraryFolder && (
-        <Notice
-          icon={<FolderSearch size={16} aria-hidden className="mt-0.5 shrink-0 text-ink/60" />}
+        <InlineMessage
+          tone="info"
+          variant="boxed"
+          icon={FolderSearch}
+          className={NOTICE_CLASSES}
           onDismiss={() => setAskedForFolder(false)}
         >
           <p>Pra exportar, escolha em Ajustes a pasta da Library do ProPresenter.</p>
@@ -192,18 +175,15 @@ export function ExportFab({ song }: { song: Song }) {
               Abrir Ajustes
             </Button>
           </div>
-        </Notice>
+        </InlineMessage>
       )}
       {error && (
-        <DismissibleAlert className="w-full max-w-sm shadow-lg" onDismiss={() => setError(null)}>
+        <InlineMessage tone="error" variant="boxed" className={NOTICE_CLASSES} onDismiss={() => setError(null)}>
           {error}
-        </DismissibleAlert>
+        </InlineMessage>
       )}
       {saved && (
-        <Notice
-          icon={<CheckCircle2 size={16} aria-hidden className="mt-0.5 shrink-0" />}
-          onDismiss={() => setSaved(null)}
-        >
+        <InlineMessage tone="success" variant="boxed" className={NOTICE_CLASSES} onDismiss={() => setSaved(null)}>
           <p>
             Música importada com sucesso!
             {saved.addedToPlaylist && saved.playlistName ? (
@@ -227,20 +207,19 @@ export function ExportFab({ song }: { song: Song }) {
             )}
           </p>
           {saved.playlistError && (
-            <p className="mt-1 flex items-start gap-1.5 text-red-600">
-              <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
-              <span>Não deu pra adicionar à playlist. {saved.playlistError}</span>
-            </p>
+            <InlineMessage tone="error" className="mt-1">
+              Não deu pra adicionar à playlist. {saved.playlistError}
+            </InlineMessage>
           )}
-        </Notice>
+        </InlineMessage>
       )}
       <button
         onClick={handleExport}
-        disabled={!canExport || status === "loading"}
+        disabled={!canExport || loading}
         title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
-        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-white/80 transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_0_20px_4px_var(--color-white)] shadow-white/80 transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
-        {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+        {loading ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         Enviar para ProPresenter
       </button>
       <PlaylistPickerModal

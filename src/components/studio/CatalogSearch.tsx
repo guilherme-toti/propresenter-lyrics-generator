@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef, useState, type ReactNode } from "react";
-import { ChevronDown, CircleAlert, Globe, LibraryBig, Loader2, Search } from "lucide-react";
+import { ChevronDown, Globe, LibraryBig, Loader2, Search } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Input, Label } from "@/components/ui/Field";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { PickRow } from "@/components/ui/PickRow";
 import { useGenerateSong } from "@/lib/useGenerateSong";
 import { useImportSong, type ImportableFile } from "@/lib/useImportSong";
@@ -40,15 +41,6 @@ function SectionStatus({ icon, text }: { icon: ReactNode; text: string }) {
   return <p className="flex items-center gap-2 text-sm text-ink/55">{icon}{text}</p>;
 }
 
-function ErrorLine({ message }: { message: string }) {
-  return (
-    <p className="flex items-center gap-2 text-sm text-red-600">
-      <CircleAlert size={14} className="shrink-0" />
-      {message}
-    </p>
-  );
-}
-
 function ResultSection<T>({
   heading,
   state,
@@ -75,7 +67,7 @@ function ResultSection<T>({
       {state.status === "loading" && (
         <SectionStatus icon={<Loader2 size={14} className="animate-spin" />} text="Procurando…" />
       )}
-      {state.status === "error" && <ErrorLine message={state.message} />}
+      {state.status === "error" && <InlineMessage tone="error">{state.message}</InlineMessage>}
       {state.status === "done" && items.length === 0 && <SectionStatus icon={null} text={emptyText} />}
       {visible.length > 0 && <ul className="flex flex-col gap-1">{visible.map(renderItem)}</ul>}
       {hiddenCount > 0 && onShowAll && (
@@ -207,7 +199,7 @@ export function CatalogSearch({
               </li>
             )}
           />
-          {library.openError && <ErrorLine message={library.openError} />}
+          {library.openError && <InlineMessage tone="error">{library.openError}</InlineMessage>}
           <ResultSection
             heading={
               <>

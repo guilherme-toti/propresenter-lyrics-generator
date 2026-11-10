@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/Button";
 import { CatalogSearch } from "@/components/studio/CatalogSearch";
 import { useLibraryStore } from "@/lib/store";
 import { useDesktopStore } from "@/lib/desktopStore";
-import { isDesktopApp } from "@/lib/tauri/env";
 import { useGenerateSong } from "@/lib/useGenerateSong";
 import { useOpenLibraryFile } from "@/lib/useImportSong";
 import { useGenerationStore } from "@/lib/generationStore";
@@ -60,7 +59,7 @@ function NewSongOptions({ onClose }: { onClose: () => void }) {
       <CatalogSearch
         onPick={(track) => void handlePick(track)}
         library={
-          isDesktopApp() && libraryFolder
+          libraryFolder
             ? {
                 folder: libraryFolder,
                 onPick: (file) => void libraryFile.open(file),
