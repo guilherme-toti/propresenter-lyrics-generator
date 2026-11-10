@@ -30,8 +30,12 @@ const IGNORED_DESTINATIONS = new Set([
  * escape conventions `rtf.ts`'s `buildLyricsRtf`/`escapeRtfText` produce,
  * which that file's own doc comment says were verified against a real
  * decoded .pro file — this extractor was verified the same way, against two.
+ *
+ * Returns one trimmed entry per paragraph, blank ones included: this app's
+ * export writes a blank paragraph for a row sung in only the other language,
+ * and dropping it would shift every later line against the other box.
  */
-export function rtfToPlainText(rtf: string): string {
+export function rtfToLines(rtf: string): string[] {
   let i = 0;
   const n = rtf.length;
   const paragraphs: string[] = [];
@@ -128,8 +132,10 @@ export function rtfToPlainText(rtf: string): string {
   }
   flushParagraph();
 
-  return paragraphs
-    .map((p) => p.trim())
-    .filter(Boolean)
-    .join("\n");
+  return paragraphs.map((p) => p.trim());
+}
+
+/** The non-blank paragraphs of an `rtf_data` payload, one per line. */
+export function rtfToPlainText(rtf: string): string {
+  return rtfToLines(rtf).filter(Boolean).join("\n");
 }

@@ -26,6 +26,7 @@ export async function POST(request: Request) {
       languageA: imported.languageA,
       languageB: imported.languageB,
       alignment: imported.alignment,
+      exportOptions: imported.exportOptions,
     });
     return NextResponse.json({ song } satisfies ImportedSongReply);
   } catch (error) {

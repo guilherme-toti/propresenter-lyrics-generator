@@ -1,5 +1,6 @@
 import { groupIntoSlides } from "@/lib/alignment";
 import type { AlignedLine, Song } from "@/lib/types";
+import { ENGLISH_BOX, PORTUGUESE_BOX } from "./appLayout";
 import { buildEmptyNotesRtf, buildLyricsRtf, type RtfTextStyle } from "./rtf";
 import { slideLines } from "./slideText";
 
@@ -110,7 +111,7 @@ const STYLE_B: Omit<RtfTextStyle, "fontSizePt"> = {
 function buildSlideElements(rows: AlignedLine[]) {
   return [
     buildTextElement(slideLines(rows, "a"), {
-      name: "1",
+      name: PORTUGUESE_BOX,
       x: MARGIN_X,
       y: 60,
       width: BOX_WIDTH,
@@ -118,7 +119,7 @@ function buildSlideElements(rows: AlignedLine[]) {
       style: { ...STYLE_A, fontSizePt: 72 },
     }),
     buildTextElement(slideLines(rows, "b"), {
-      name: "2",
+      name: ENGLISH_BOX,
       x: MARGIN_X,
       y: 560,
       width: BOX_WIDTH,
