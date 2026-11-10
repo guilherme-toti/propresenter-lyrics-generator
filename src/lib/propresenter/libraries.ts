@@ -61,7 +61,8 @@ export async function listLibraryDirs(libraryFolder: string): Promise<LibraryDir
   return [{ name: path.basename(libraryFolder), path: libraryFolder }];
 }
 
-async function listProFiles(dir: LibraryDir): Promise<ImportableFile[]> {
+/** The .pro files directly inside one library folder. */
+export async function listProFiles(dir: LibraryDir): Promise<ImportableFile[]> {
   const entries = await fs.readdir(dir.path, { withFileTypes: true });
   return entries
     .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".pro"))

@@ -10,7 +10,8 @@
     "tauri:dev:next": "cross-env PMA_DESKTOP_APP=1 next dev -p 3100",
     "tauri:prepare-sidecar": "node scripts/tauri/prebuild.mjs --sidecar-only",
     "tauri:prebuild": "node scripts/tauri/clean.mjs && next build && node scripts/tauri/prebuild.mjs",
-    "tauri:build": "tauri build"
+    "tauri:build": "tauri build",
+    "library-audit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --import ./scripts/library-audit/loader.mjs scripts/library-audit/cli.mts"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.11.1",
