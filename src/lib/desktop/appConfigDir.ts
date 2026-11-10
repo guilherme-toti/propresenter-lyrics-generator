@@ -22,3 +22,16 @@ export function userAppDataDir(): string {
 export function getAppConfigDir(): string {
   return path.join(userAppDataDir(), APP_IDENTIFIER);
 }
+
+/** Where this OS keeps per-user caches: files the app can download again, so the OS or the user may
+ * clear them without losing anything. */
+function userCacheDir(): string {
+  const home = os.homedir();
+  if (process.platform === "darwin") return path.join(home, "Library", "Caches");
+  if (process.platform === "win32") return process.env.LOCALAPPDATA || path.join(home, "AppData", "Local");
+  return process.env.XDG_CACHE_HOME || path.join(home, ".cache");
+}
+
+export function getAppCacheDir(): string {
+  return path.join(userCacheDir(), APP_IDENTIFIER);
+}

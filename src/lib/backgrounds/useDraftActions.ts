@@ -213,6 +213,7 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
     dismissSummary: () => setSummary(null),
     historySteps,
     stageOn,
+    addFiles,
     pickForTray,
     pickForSlot,
     dropFiles,

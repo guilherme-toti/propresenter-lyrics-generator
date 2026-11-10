@@ -102,6 +102,18 @@ Open **Ajustes** (the gear icon in the header) to configure:
 
 **Why playlist discovery and the playlist add both go through ProPresenter's API rather than its files:** in ProPresenter 7, a *Playlist* isn't a folder — it's a structured document (same protobuf family as `.pro` files, see `vendor/propresenter7-proto/proto/playlist.proto`). ProPresenter reads that document into memory at launch and never re-reads it while running, so a file it wrote may not even be flushed yet, and editing it from outside is invisible until a restart and gets overwritten by ProPresenter's own next save. Asking the running ProPresenter directly instead is immediate, live, and safe. It does require ProPresenter to be open with Network enabled — without that, the export still writes into the Library and tells you to drag it in, and playlist discovery simply finds nothing to suggest.
 
+### Google Drive on the Backgrounds screen
+
+The tray's "Do Google Drive" buttons ("Pasta padrão", "Inserir link") browse a Drive folder and download the picked files into the tray. The app reads Drive as a **service account** (a Google account for apps, no sign-in), so the folder only has to be shared with that account's email, not made public. One-time setup, in a Google Cloud project:
+
+1. **APIs & Services → Library**: enable the **Google Drive API**.
+2. **IAM & Admin → Service Accounts → Create service account**. It needs no roles.
+3. In the new account, **Keys → Add key → Create new key → JSON**, and keep the downloaded file somewhere private.
+4. In the app, **Ajustes → Google Drive → Conta de serviço do Google → Escolher arquivo**, and pick that file. The app checks it with Google right away, then keeps a copy only the current user can read, as `google-service-account.json` in the same config directory as `.env`. Only the account's email ever goes back to the window.
+5. Share the Drive folder with the email Ajustes shows ("Copiar e-mail") as **Viewer**. Optionally paste the folder's link in "Pasta padrão".
+
+The account gets read-only Drive access and sees only what's shared with it. Google Workspace organisations that block sharing outside the organisation will refuse step 5; share from a personal account then, or ask the admin to allow it. Downloads are cached in the OS cache directory (`~/Library/Caches/com.pma.lyricsstudio/google-drive` on macOS) and deleted after 7 days unused.
+
 ## Project structure
 
 ```

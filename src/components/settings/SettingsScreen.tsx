@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { CheckCircle2, CircleDashed, KeyRound, Loader2, MonitorPlay, type LucideIcon } from "lucide-react";
+import { Check, CheckCircle2, CircleDashed, Cloud, Copy, KeyRound, Loader2, MonitorPlay, type LucideIcon } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
 import { Input } from "@/components/ui/Field";
@@ -12,6 +12,8 @@ import { readMaskedApiKey, saveApiKey, testProPresenterConnection } from "@/lib/
 import { parsePort } from "@/lib/desktop/parsePort";
 import { checkProPresenterFolder } from "@/lib/backgrounds/api";
 import { useDetectProPresenterFolder } from "@/lib/backgrounds/useDetectProPresenterFolder";
+import { readServiceAccountEmail, saveServiceAccount } from "@/lib/drive/api";
+import { driveFolderUrl, NOT_A_FOLDER_LINK, parseDriveFolderLink } from "@/lib/drive/driveLinks";
 import { errorMessage } from "@/lib/postJson";
 import { PlaylistPickerModal } from "./PlaylistPickerModal";
 
@@ -290,6 +292,144 @@ function PlaylistRow({ onPick }: { onPick: () => void }) {
   );
 }
 
+const COPIED_FEEDBACK_MS = 2_000;
+
+/**
+ * The Google account the Backgrounds screen opens Drive folders as. Shows its email with a copy
+ * button, since that's the address the folder has to be shared with. The key itself never comes
+ * back from the server.
+ */
+function ServiceAccountRow() {
+  const [email, setEmail] = useState<string | null>(null);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    readServiceAccountEmail()
+      .catch(() => null)
+      .then((current) => {
+        if (cancelled) return;
+        setEmail(current);
+        setLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
+    return () => clearTimeout(timer);
+  }, [copied]);
+
+  const pick = async () => {
+    const picked = await open({
+      multiple: false,
+      directory: false,
+      title: "Chave da conta de serviço",
+      filters: [{ name: "Chave JSON", extensions: ["json"] }],
+    });
+    if (typeof picked !== "string") return;
+    setSaving(true);
+    setError(null);
+    try {
+      setEmail(await saveServiceAccount({ path: picked }));
+    } catch (err) {
+      setError(errorMessage(err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const copy = async () => {
+    if (!email) return;
+    try {
+      await navigator.clipboard.writeText(email);
+      setCopied(true);
+    } catch {
+      setError("Não deu pra copiar. Selecione o e-mail e copie à mão.");
+    }
+  };
+
+  return (
+    <SettingRow
+      title="Conta de serviço do Google"
+      description="O arquivo .json da chave dela, do Google Cloud. Compartilhe a pasta do Drive com o e-mail dela, como Leitor."
+      done={loaded ? email !== null : null}
+      control={
+        <ValueControl
+          value={
+            <span className="select-all truncate">
+              {!loaded ? "Carregando…" : saving ? "Conferindo com o Google…" : (email ?? "Nenhuma conta configurada")}
+            </span>
+          }
+        >
+          <Button variant="secondary" size="sm" onClick={() => void pick()} disabled={saving}>
+            {email ? "Trocar" : "Escolher"}
+          </Button>
+        </ValueControl>
+      }
+      footer={
+        <>
+          {email && (
+            <Button variant="ghost" size="sm" onClick={() => void copy()} className="mt-1 -ml-2.5">
+              {copied ? <Check size={14} aria-hidden /> : <Copy size={14} aria-hidden />}
+              {copied ? "E-mail copiado" : "Copiar e-mail"}
+            </Button>
+          )}
+          {error && (
+            <InlineMessage tone="error" className="mt-2">
+              {error}
+            </InlineMessage>
+          )}
+        </>
+      }
+    />
+  );
+}
+
+/** Kept only once it reads as a folder link, like the port: a half-pasted link leaves no default.
+ * What's kept is the clean link, without whatever was pasted around it. */
+function DriveFolderRow() {
+  const link = useDesktopStore((s) => s.driveFolderLink);
+  const setLink = useDesktopStore((s) => s.setDriveFolderLink);
+  const [value, setValue] = useState(link ?? "");
+
+  const save = (raw: string) => {
+    setValue(raw);
+    const ref = parseDriveFolderLink(raw);
+    setLink(ref ? driveFolderUrl(ref) : null);
+  };
+
+  return (
+    <SettingRow
+      title="Pasta padrão"
+      description={'A pasta que o botão "Pasta padrão" abre na tela Backgrounds. Precisa estar compartilhada com a conta de serviço acima.'}
+      done={link !== null}
+      control={
+        <Input
+          aria-label="Link da pasta padrão do Google Drive"
+          placeholder="https://drive.google.com/drive/folders/…"
+          value={value}
+          onChange={(e) => save(e.target.value)}
+        />
+      }
+      footer={
+        value.trim() !== "" &&
+        !parseDriveFolderLink(value) && (
+          <InlineMessage tone="error" className="mt-2">
+            {NOT_A_FOLDER_LINK}
+          </InlineMessage>
+        )
+      }
+    />
+  );
+}
+
 /**
  * The key is never sent to this component in full after the initial paste —
  * the API only ever returns a masked form (see the /api/settings/*-api-key
@@ -445,6 +585,11 @@ export function SettingsScreen() {
             description="Usada pra buscar a letra oficial no catálogo."
             placeholder="Cole a chave da Musixmatch"
           />
+        </SettingsSection>
+
+        <SettingsSection icon={Cloud} title="Google Drive">
+          <ServiceAccountRow />
+          <DriveFolderRow />
         </SettingsSection>
       </div>
 

@@ -28,6 +28,7 @@ import type { MacroMedia } from "@/lib/propresenter/backgrounds/slots";
 import { ClearScreenButton } from "./ClearScreenButton";
 import { InlineMessage } from "@/components/ui/InlineMessage";
 import { MacroRow } from "./MacroRow";
+import { DriveBrowser, type DriveStart } from "./DriveBrowser";
 import { MediaTray } from "./MediaTray";
 import { refusalLabel, ScreenFrame, type FrameDragState } from "./ScreenFrame";
 import { SendBar } from "./SendBar";
@@ -89,6 +90,7 @@ export function BackgroundsScreen() {
   const actions = useDraftActions(folder, overviewState);
   const [screenError, setScreenError] = useState<string | null>(null);
   const [separateTarget, setSeparateTarget] = useState<SeparateTarget | null>(null);
+  const [driveStart, setDriveStart] = useState<DriveStart | null>(null);
   // The last macro run from here. It puts every file it uses on screen, so its card says so.
   const [onScreenMacroUuid, setOnScreenMacroUuid] = useState<string | null>(null);
   const screensScroller = useRef<HTMLDivElement>(null);
@@ -255,6 +257,7 @@ export function BackgroundsScreen() {
       refusals={actions.trayRefusals}
       error={actions.trayError}
       onPick={() => void actions.pickForTray()}
+      onOpenDrive={setDriveStart}
       onSelect={(trayFileId) => selectTrayFile(draft.selectedTrayFileId === trayFileId ? null : trayFileId)}
       onRemove={draft.removeFromTray}
       onDismissMessages={actions.dismissTrayMessages}
@@ -328,6 +331,12 @@ export function BackgroundsScreen() {
           )}
         </div>
       </div>
+
+      <DriveBrowser
+        start={driveStart}
+        onClose={() => setDriveStart(null)}
+        onDownloaded={(paths) => void actions.addFiles(paths)}
+      />
 
       {separateTarget && (
         <SeparateScreenModal

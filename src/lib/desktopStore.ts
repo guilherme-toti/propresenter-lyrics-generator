@@ -11,6 +11,7 @@ const persistedDesktopStateSchema = z.object({
   activePlaylist: playlistRefSchema.nullable().optional(),
   knownPlaylistIds: z.array(z.string()).optional(),
   proApiPort: portSchema.nullable().optional(),
+  driveFolderLink: z.string().nullable().optional(),
 });
 
 interface DesktopState {
@@ -30,11 +31,14 @@ interface DesktopState {
   playlistsBaselined: boolean;
   activePlaylist: PlaylistRef | null;
   knownPlaylistIds: string[];
+  /** The Drive folder the Backgrounds screen's "Pasta padrão" opens, as a clean folder link. */
+  driveFolderLink: string | null;
 
   setLibraryFolder: (folder: string | null) => void;
   setProPresenterFolder: (folder: string | null) => void;
   setProApiPort: (port: number | null) => void;
   setActivePlaylist: (playlist: PlaylistRef | null) => void;
+  setDriveFolderLink: (link: string | null) => void;
   rememberKnownPlaylists: (ids: string[]) => void;
   markPlaylistsBaselined: () => void;
 }
@@ -48,6 +52,7 @@ export const useDesktopStore = create<DesktopState>()(
       playlistsBaselined: false,
       activePlaylist: null,
       knownPlaylistIds: [],
+      driveFolderLink: null,
 
       setLibraryFolder: (folder) => set({ libraryFolder: folder }),
 
@@ -58,6 +63,8 @@ export const useDesktopStore = create<DesktopState>()(
       setProApiPort: (port) => set({ proApiPort: port, playlistsBaselined: false, knownPlaylistIds: [] }),
 
       setActivePlaylist: (playlist) => set({ activePlaylist: playlist }),
+
+      setDriveFolderLink: (link) => set({ driveFolderLink: link }),
 
       rememberKnownPlaylists: (ids) =>
         set((state) => ({ knownPlaylistIds: Array.from(new Set([...state.knownPlaylistIds, ...ids])) })),

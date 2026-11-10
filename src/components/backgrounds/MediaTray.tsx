@@ -1,12 +1,13 @@
 "use client";
 
 import type { PointerEvent } from "react";
-import { Check, FolderOpen, ImagePlus, Plus, X } from "lucide-react";
+import { Check, Cloud, FolderOpen, ImagePlus, Link2, Plus, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { trayPreviewUrl } from "@/lib/backgrounds/api";
 import type { TrayFile, TrayRefusal } from "@/lib/propresenter/backgrounds/tray";
 import { InlineMessage } from "@/components/ui/InlineMessage";
+import type { DriveStart } from "./DriveBrowser";
 import { MediaPreview } from "./MediaPreview";
 
 type PointerHandlers = Record<
@@ -25,6 +26,7 @@ interface MediaTrayProps {
   refusals: TrayRefusal[];
   error: string | null;
   onPick: () => void;
+  onOpenDrive: (start: DriveStart) => void;
   onSelect: (trayFileId: string) => void;
   onRemove: (trayFileId: string) => void;
   onDismissMessages: () => void;
@@ -45,6 +47,7 @@ export function MediaTray({
   refusals,
   error,
   onPick,
+  onOpenDrive,
   onSelect,
   onRemove,
   onDismissMessages,
@@ -67,6 +70,26 @@ export function MediaTray({
         ))}
       </ul>
     </InlineMessage>
+  );
+
+  // At the bottom, where it stays in reach however many files the tray holds.
+  const driveBar = (
+    <div className={cn("sticky bottom-0 z-10 mt-auto border-t border-line px-4 pb-4 pt-3 transition-colors", background)}>
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-medium text-ink/65">
+        <Cloud size={16} aria-hidden />
+        Do Google Drive
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button variant="secondary" size="sm" onClick={() => onOpenDrive("default")}>
+          <FolderOpen size={14} aria-hidden />
+          Pasta padrão
+        </Button>
+        <Button variant="secondary" size="sm" onClick={() => onOpenDrive("link")}>
+          <Link2 size={14} aria-hidden />
+          Inserir link
+        </Button>
+      </div>
+    </div>
   );
 
   return (
@@ -96,6 +119,7 @@ export function MediaTray({
               Escolher arquivos
             </Button>
           </div>
+          {driveBar}
         </>
       ) : (
         <>
@@ -178,6 +202,7 @@ export function MediaTray({
               );
             })}
           </ul>
+          {driveBar}
         </>
       )}
     </section>

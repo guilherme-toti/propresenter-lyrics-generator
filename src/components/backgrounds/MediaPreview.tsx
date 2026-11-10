@@ -27,6 +27,22 @@ function PreviewMessage({ icon, children, overlay }: { icon: ReactNode; children
   );
 }
 
+/** Marks a preview as a video, since a still frame alone looks like an image. `compact` drops the
+ * word, for a thumbnail too small to carry it; the file's name says what it is there. */
+export function VideoBadge({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "pointer-events-none absolute inline-flex items-center gap-1 rounded-full bg-ink/70 text-xs text-cream-50 backdrop-blur-sm",
+        compact ? "bottom-1 left-1 p-1" : "bottom-1.5 left-1.5 px-1.5 py-0.5",
+      )}
+    >
+      <Play size={10} className="fill-current" aria-hidden />
+      {!compact && "Vídeo"}
+    </span>
+  );
+}
+
 function CentredOverlay({ children }: { children: ReactNode }) {
   return <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-1">{children}</div>;
 }
@@ -71,10 +87,7 @@ function VideoPreview({ src, fileName, fit, overlay }: VideoPreviewProps) {
           {overlay && <CentredOverlay>{overlay}</CentredOverlay>}
         </>
       )}
-      <span className="pointer-events-none absolute bottom-1.5 left-1.5 inline-flex items-center gap-1 rounded-full bg-ink/70 px-1.5 py-0.5 text-xs text-cream-50 backdrop-blur-sm">
-        <Play size={10} className="fill-current" aria-hidden />
-        Vídeo
-      </span>
+      <VideoBadge />
     </>
   );
 }
