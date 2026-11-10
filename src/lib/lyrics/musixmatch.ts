@@ -25,6 +25,38 @@ export function isMusixmatchConfigured(): boolean {
   return Boolean(process.env.MUSIXMATCH_API_KEY);
 }
 
+/** Why the catalogue couldn't be searched: a stable code for the route and the logs. */
+export type MusixmatchFailure = "not-configured" | "key-rejected" | "quota" | "unavailable";
+
+/** One line each for the person searching: what went wrong and, when it's theirs to fix, where. */
+const FAILURE_MESSAGES: Record<MusixmatchFailure, string> = {
+  "not-configured": "Não deu pra buscar na internet: falta a chave da Musixmatch em Ajustes.",
+  "key-rejected": "Não deu pra buscar na internet: a Musixmatch recusou a chave salva em Ajustes.",
+  quota: "Não deu pra buscar na internet: a Musixmatch chegou ao limite de buscas. Tente mais tarde.",
+  unavailable: "Não deu pra buscar na internet: a Musixmatch não respondeu. Confira a conexão e tente de novo.",
+};
+
+/** A search that couldn't run, as opposed to one that found nothing. `message` is written for the
+ * user and shown as-is; the technical detail is already in the server log. */
+export class MusixmatchError extends Error {
+  // A plain field, not a constructor parameter property: Node's type stripping can't run those.
+  readonly code: MusixmatchFailure;
+
+  constructor(code: MusixmatchFailure) {
+    super(FAILURE_MESSAGES[code]);
+    this.name = "MusixmatchError";
+    this.code = code;
+  }
+}
+
+/** The envelope statuses other than 200 that a search can get (docs.musixmatch.com; a bogus key
+ * probed as 401). */
+function failureForStatus(status: number | undefined): MusixmatchFailure {
+  if (status === 401 || status === 403) return "key-rejected";
+  if (status === 402) return "quota";
+  return "unavailable";
+}
+
 /**
  * How many catalogue matches to fetch per search mode (by title, by lyrics). Wide enough that the
  * recording musixmatch.com itself calls "best result" — which ranks by relevance first, then
@@ -76,9 +108,12 @@ interface SearchEnvelope {
   };
 }
 
-async function request<T>(path: string, params: Record<string, string>): Promise<T | null> {
+/** Answers the API's envelope, or throws a MusixmatchError when there's no envelope to read. The
+ * envelope's own status is the caller's to check: Musixmatch puts "bad key" and "over quota" inside
+ * an HTTP 200. */
+async function call<T>(path: string, params: Record<string, string>): Promise<T> {
   const apiKey = process.env.MUSIXMATCH_API_KEY;
-  if (!apiKey) return null;
+  if (!apiKey) throw new MusixmatchError("not-configured");
 
   const url = new URL(`${API_BASE}/${path}`);
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
@@ -86,14 +121,21 @@ async function request<T>(path: string, params: Record<string, string>): Promise
 
   try {
     const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
-    if (!res.ok) {
-      console.error(`musixmatch ${path} responded ${res.status}`);
-      return null;
-    }
-    return (await res.json()) as T;
+    if (res.ok) return (await res.json()) as T;
+    console.error(`musixmatch ${path} responded ${res.status}`);
   } catch (error) {
     console.error(`musixmatch ${path} request failed`, error);
-    return null;
+  }
+  throw new MusixmatchError("unavailable");
+}
+
+/** `call` for the lyrics lookups, whose callers fall back to the model on any failure. */
+async function request<T>(path: string, params: Record<string, string>): Promise<T | null> {
+  try {
+    return await call<T>(path, params);
+  } catch (error) {
+    if (error instanceof MusixmatchError) return null;
+    throw error;
   }
 }
 
@@ -112,12 +154,19 @@ export async function searchTracks(query: string): Promise<TrackCandidate[]> {
   // preparando um caminho endireitando as veredas" returns, under `q`, songs merely *titled*
   // "Estou Te Preparando" — and under `q_lyrics`, the three recordings of the song that line
   // actually opens. A title behaves the other way round.
-  const [byTitle, byLyrics] = await Promise.all([
+  const [byTitle, byLyrics] = await Promise.allSettled([
     searchWith({ q: query }),
     searchWith({ q_lyrics: query }),
   ]);
 
-  return combineSearchResults(byLyrics, byTitle);
+  // One mode failing alone (a timeout) still leaves the other's matches worth showing. Only when
+  // both fail is there nothing to offer, and then the user hears why rather than "nothing found".
+  if (byTitle.status === "rejected" && byLyrics.status === "rejected") throw byTitle.reason;
+  return combineSearchResults(matchesOf(byLyrics), matchesOf(byTitle));
+}
+
+function matchesOf(search: PromiseSettledResult<TrackCandidate[]>): TrackCandidate[] {
+  return search.status === "fulfilled" ? search.value : [];
 }
 
 /**
@@ -169,7 +218,7 @@ function promoteMostPopular(candidates: TrackCandidate[]): TrackCandidate[] {
 }
 
 async function searchWith(params: Record<string, string>): Promise<TrackCandidate[]> {
-  const payload = await request<SearchEnvelope>("track.search", {
+  const payload = await call<SearchEnvelope>("track.search", {
     ...params,
     f_has_lyrics: "1",
     // No s_track_rating here on purpose: it's documented as sorting the whole result set by
@@ -181,9 +230,13 @@ async function searchWith(params: Record<string, string>): Promise<TrackCandidat
     // ranking in charge, which is what the search actually needs to be useful.
     page_size: String(SEARCH_PAGE_SIZE),
   });
-  if (payload?.message?.header?.status_code !== 200) return [];
+  const status = payload.message?.header?.status_code;
+  if (status !== 200) {
+    console.error(`musixmatch track.search status ${status}`);
+    throw new MusixmatchError(failureForStatus(status));
+  }
 
-  return (payload.message.body?.track_list ?? [])
+  return (payload.message?.body?.track_list ?? [])
     .map((entry) => entry.track)
     // has_lyrics=1 only means Musixmatch has *a* lyrics entry for this recording, not that it's
     // actually retrievable — restricted tracks ("not authorized to show these lyrics") show up in

@@ -18,9 +18,9 @@ export function useGenerateSong() {
   const startSong = useLibraryStore((s) => s.startSong);
 
   /**
-   * Catalogue matches for the picker. An empty list means either nothing matched or no catalogue
-   * is configured — either way, the dialog just shows the empty-results message, and "Criar
-   * manualmente" is the only option left.
+   * Catalogue matches for the picker. An empty list means the catalogue really found nothing; a
+   * search that couldn't run (no key, a refused key, no connection) comes back as the route's
+   * `error`, which says why.
    */
   const search = async (
     query: string,

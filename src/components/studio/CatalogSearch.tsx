@@ -16,8 +16,8 @@ const MIN_QUERY_LENGTH = 2;
 const LIBRARY_PREVIEW_COUNT = 3;
 
 /**
- * One source's side of a search. "done" with no items covers both "found nothing" and "catalogue
- * not configured" — either way there's nothing to pick from.
+ * One source's side of a search. "done" with no items is a real "found nothing"; a source that
+ * couldn't be searched at all (the catalogue's key missing or refused) is "error", with the reason.
  */
 type SourceState<T> =
   | { status: "idle" }

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { isMusixmatchConfigured, searchTracks } from "@/lib/lyrics/musixmatch";
+import { loadDesktopEnv } from "@/lib/desktop/envFile";
+import { isMusixmatchConfigured, MusixmatchError, searchTracks } from "@/lib/lyrics/musixmatch";
 
 const requestSchema = z.object({
   query: z.string().trim().min(2, "Digite o título de uma música ou um trecho da letra."),
@@ -18,16 +19,20 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "Requisição inválida." }, { status: 400 });
   }
 
-  // Without a key there is no catalogue to pick from; the caller just shows an empty
-  // results list, and "Criar manualmente" is the only option left.
-  if (!isMusixmatchConfigured()) {
-    return NextResponse.json({ results: [] });
-  }
+  // Ajustes shows the key in the .env file, but this process read that file only at boot: a key
+  // written there afterwards by anything but Ajustes' own save would sit unused until a restart,
+  // while Ajustes shows it saved. Every catalogue flow starts with a search, so catching up here
+  // is enough.
+  if (!isMusixmatchConfigured()) await loadDesktopEnv();
 
   try {
     const results = await searchTracks(parsed.data.query);
     return NextResponse.json({ results });
   } catch (error) {
+    // An empty list would read as "nothing found", so a search that couldn't run says why.
+    if (error instanceof MusixmatchError) {
+      return NextResponse.json({ error: error.message }, { status: error.code === "not-configured" ? 501 : 502 });
+    }
     console.error("catalogue search failed", error);
     return NextResponse.json({ error: "Não foi possível buscar no catálogo." }, { status: 502 });
   }
