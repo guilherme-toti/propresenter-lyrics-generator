@@ -34,19 +34,28 @@ function EditorPanel({
   song,
   side,
   onRawChange,
-  translating,
+  translatingSide,
+  translationFailure,
   onCancelTranslation,
+  onDismissTranslationFailure,
   onRetranslate,
 }: {
   song: Song;
   side: "languageA" | "languageB";
   onRawChange: (side: "languageA" | "languageB", value: string) => void;
-  /** Set by useAutoLiteralTranslation (via StudioShell) while it's filling this side automatically. */
-  translating: boolean;
+  /** The side a "Traduzir com IA" the user clicked is filling in right now, if any (via StudioShell). */
+  translatingSide: "languageA" | "languageB" | null;
+  /** Why this side's last "Traduzir com IA" didn't land, in the route's own words. */
+  translationFailure: string | null;
   onCancelTranslation: () => void;
+  onDismissTranslationFailure: () => void;
   onRetranslate: (side: "languageA" | "languageB") => void;
 }) {
   const raw = song[side];
+  const translating = translatingSide === side;
+  // The translation rewrites both sides from the text sent at the click, so while it runs anything
+  // typed into either box would be lost when it lands.
+  const locked = translatingSide !== null;
 
   const stats = useMemo(() => {
     const blocks = splitIntoBlocks(raw);
@@ -72,7 +81,8 @@ function EditorPanel({
             </button>
           </span>
         ) : (
-          canOfferAiTranslation(song, side) && (
+          // A second translation would silently cancel the one running on the other side.
+          canOfferAiTranslation(song, side) && !locked && (
             <button
               onClick={() => onRetranslate(side)}
               title="Traduz este lado literalmente com IA, a partir do texto atual do outro lado."
@@ -83,9 +93,17 @@ function EditorPanel({
           )
         )}
       </div>
+      {translationFailure && (
+        <InlineMessage tone="error" onDismiss={onDismissTranslationFailure} className="mb-2">
+          {translationFailure}
+        </InlineMessage>
+      )}
       <TextArea
         rows={12}
         value={raw}
+        readOnly={locked}
+        aria-busy={locked}
+        className={locked ? "opacity-60" : undefined}
         onChange={(e) => onRawChange(side, e.target.value)}
         placeholder="Cole a letra aqui. Deixe uma linha em branco entre as seções (verso, refrão, ponte…)."
       />
@@ -102,13 +120,19 @@ const AUTO_REALIGN_DELAY_MS = 600;
 export function LyricsEditors({
   song,
   translatingSide,
+  translationFailure,
   onCancelTranslation,
+  onDismissTranslationFailure,
   onRetranslate,
 }: {
   song: Song;
-  /** Which side (if any) useAutoLiteralTranslation is currently filling in — see StudioShell. */
+  /** The side a "Traduzir com IA" the user clicked is filling in right now, if any — see StudioShell.
+   * Both boxes stay read-only until it lands or is cancelled. */
   translatingSide: "languageA" | "languageB" | null;
+  /** The last "Traduzir com IA" that failed, and on which side. */
+  translationFailure: { side: "languageA" | "languageB"; message: string } | null;
   onCancelTranslation: () => void;
+  onDismissTranslationFailure: () => void;
   onRetranslate: (side: "languageA" | "languageB") => void;
 }) {
   const setLanguageRaw = useLibraryStore((s) => s.setLanguageRaw);
@@ -159,27 +183,37 @@ export function LyricsEditors({
           song={song}
           side="languageA"
           onRawChange={handleRawChange}
-          translating={translatingSide === "languageA"}
+          translatingSide={translatingSide}
+          translationFailure={translationFailure?.side === "languageA" ? translationFailure.message : null}
           onCancelTranslation={onCancelTranslation}
+          onDismissTranslationFailure={onDismissTranslationFailure}
           onRetranslate={onRetranslate}
         />
         <EditorPanel
           song={song}
           side="languageB"
           onRawChange={handleRawChange}
-          translating={translatingSide === "languageB"}
+          translatingSide={translatingSide}
+          translationFailure={translationFailure?.side === "languageB" ? translationFailure.message : null}
           onCancelTranslation={onCancelTranslation}
+          onDismissTranslationFailure={onDismissTranslationFailure}
           onRetranslate={onRetranslate}
         />
       </div>
       <div className="mt-3 flex flex-col items-center gap-2">
         <div className="flex justify-center gap-2">
-          <Button variant="secondary" size="sm" onClick={() => realignFromManualText()}>
+          <Button variant="secondary" size="sm" onClick={() => realignFromManualText()} disabled={translatingSide !== null}>
             <RefreshCw size={13} />
             {hasAlignment ? "Realinhar a partir do texto" : "Alinhar letra"}
           </Button>
           {hasAlignment && (
-            <Button variant="secondary" size="sm" onClick={handleRealignWithAi} disabled={aiLoading}>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleRealignWithAi}
+              // A realignment landing after the translation would put back the text from before it.
+              disabled={aiLoading || translatingSide !== null}
+            >
               {aiLoading ? <Loader2 size={13} className="animate-spin" /> : <Sparkles size={13} />}
               Realinhar com IA
             </Button>

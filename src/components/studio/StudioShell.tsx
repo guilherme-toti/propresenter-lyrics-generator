@@ -32,7 +32,7 @@ function EmptyState({ onNewSong }: { onNewSong: () => void }) {
 
 export function StudioShell({ onNewSong }: { onNewSong: () => void }) {
   const song = useLibraryStore((s) => s.song);
-  const { translatingSide, cancel, retranslate } = useAutoLiteralTranslation(song);
+  const { translatingSide, translationFailure, cancel, dismissFailure, retranslate } = useAutoLiteralTranslation(song);
 
   if (!song) {
     return <EmptyState onNewSong={onNewSong} />;
@@ -42,16 +42,18 @@ export function StudioShell({ onNewSong }: { onNewSong: () => void }) {
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-6 py-8 pb-28">
       <SongMetadataCard song={song} />
       <div className="grid gap-3 sm:grid-cols-2">
-        <LanguageSourceCard song={song} side="languageA" label="Português" translating={translatingSide === "languageA"} />
-        <LanguageSourceCard song={song} side="languageB" label="Inglês" translating={translatingSide === "languageB"} />
+        <LanguageSourceCard song={song} side="languageA" label="Português" translatingSide={translatingSide} />
+        <LanguageSourceCard song={song} side="languageB" label="Inglês" translatingSide={translatingSide} />
       </div>
       <LyricsEditors
         song={song}
         translatingSide={translatingSide}
+        translationFailure={translationFailure}
         onCancelTranslation={cancel}
+        onDismissTranslationFailure={dismissFailure}
         onRetranslate={retranslate}
       />
-      <AlignmentPreview song={song} />
+      <AlignmentPreview song={song} locked={translatingSide !== null} />
       <MusixmatchAttribution song={song} />
       <ExportFab song={song} />
     </div>

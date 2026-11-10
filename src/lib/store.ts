@@ -11,6 +11,7 @@ import {
   updateRowText,
   updateSectionLabel,
 } from "@/lib/alignment";
+import { withLiteralTranslation } from "@/lib/literalTranslation";
 import { createEmptySong, type AlignedLine, type Song, type SideAttribution, type SideSource } from "@/lib/types";
 import { storedSongSchema, type RealignedLyrics } from "@/lib/songSchema";
 
@@ -31,20 +32,12 @@ interface LibraryState {
   realignFromManualText: () => void;
   /** Follows an edit in the editors while an alignment exists — see applyRawTextEdits. */
   syncAlignmentWithRaw: () => void;
-  /** `translatedSide`, when given, also marks that side's literalTranslation status "done" — used
-   * by the on-demand literal-translation flow (see useAutoLiteralTranslation), not the manual
-   * "Realinhar com IA" button. */
-  applyAiRealignment: (result: RealignedLyrics, translatedSide?: "languageA" | "languageB") => void;
-  /** Marks a side's literal translation attempt as not-to-be-retried automatically (cancelled by
-   * the user, or failed) — see useAutoLiteralTranslation. The user can still ask again via
-   * "Traduzir com IA", which doesn't check this status. */
-  skipLiteralTranslation: (side: "languageA" | "languageB") => void;
-  /** Undoes a "Buscar" swap so the side goes back to blank, eligible for a literal AI translation
-   * again: drops the picked recording and its attribution (LyricsEditors' canOfferAiTranslation
-   * needs sourceA/B cleared to offer "Traduzir com IA" again on a fallback/non-translatableSide
-   * song), blanks the raw text, and resets literalTranslation status to unset (so LanguageSourceCard
-   * stops labeling it "Tradução literal" until a new translation actually completes). */
-  revertToLiteralTranslation: (side: "languageA" | "languageB") => void;
+  /** The manual "Realinhar com IA" button's result. */
+  applyAiRealignment: (result: RealignedLyrics) => void;
+  /** A "Traduzir com IA" translation that has landed on `side` — see withLiteralTranslation and
+   * useAutoLiteralTranslation. Called only on success, so a failed or cancelled request never
+   * touches the song. */
+  applyLiteralTranslation: (side: "languageA" | "languageB", result: RealignedLyrics) => void;
 
   editRow: (rowId: string, side: "a" | "b", value: string) => void;
   editSectionLabel: (rowId: string, label: string) => void;
@@ -114,39 +107,22 @@ export const useLibraryStore = create<LibraryState>()(
         });
       },
 
-      applyAiRealignment: (result, translatedSide) => {
+      applyAiRealignment: (result) => {
         set((state) => {
           if (!state.song) return state;
-          const statusKey = translatedSide === "languageA" ? "literalTranslationA" : "literalTranslationB";
           return {
             song: touch({
               ...state.song,
               languageA: result.languageARaw,
               languageB: result.languageBRaw,
               alignment: result.alignment,
-              ...(translatedSide ? { [statusKey]: "done" } : {}),
             }),
           };
         });
       },
 
-      skipLiteralTranslation: (side) => {
-        const statusKey = side === "languageA" ? "literalTranslationA" : "literalTranslationB";
-        set((state) => (state.song ? { song: touch({ ...state.song, [statusKey]: "skipped" }) } : state));
-      },
-
-      revertToLiteralTranslation: (side) => {
-        set((state) => {
-          if (!state.song) return state;
-          const sourceKey = side === "languageA" ? "sourceA" : "sourceB";
-          const attributionKey = side === "languageA" ? "attributionA" : "attributionB";
-          const statusKey = side === "languageA" ? "literalTranslationA" : "literalTranslationB";
-          const next = { ...state.song, [side]: "" };
-          delete next[sourceKey];
-          delete next[attributionKey];
-          delete next[statusKey];
-          return { song: touch(next) };
-        });
+      applyLiteralTranslation: (side, result) => {
+        set((state) => (state.song ? { song: touch(withLiteralTranslation(state.song, side, result)) } : state));
       },
 
       editRow: (rowId, side, value) => {

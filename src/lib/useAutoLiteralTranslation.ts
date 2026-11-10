@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { postJsonAs } from "@/lib/postJson";
+import { errorMessage, postJsonAs } from "@/lib/postJson";
 import { realignedLyricsReplySchema } from "@/lib/songSchema";
 import { useLibraryStore } from "@/lib/store";
 import type { Song } from "@/lib/types";
@@ -22,21 +22,21 @@ function targetLanguageFor(side: Side): "English" | "Português (Brasil)" {
  * blank until the user asks for one; this hook just knows how to run and track that request once
  * they do. Calls /api/translate-literally (translation only — never /api/realign-song, which
  * reconciles two texts against each other and, given a genuinely different song on one side, would
- * "reconcile" by discarding it rather than translating). Non-blocking: this never disables anything
- * else in the UI (export included) while it runs, and is cancellable.
+ * "reconcile" by discarding it rather than translating). While it runs, StudioShell locks only what
+ * its reply overwrites: both editors, both "Buscar" buttons, the realign buttons and the alignment
+ * preview. Export and the rest stay available, and it's cancellable. The song is only written once
+ * a translation lands, so a failed or cancelled one leaves the side exactly as it was.
  */
 export function useAutoLiteralTranslation(song: Song | null) {
-  const applyAiRealignment = useLibraryStore((s) => s.applyAiRealignment);
-  const skipLiteralTranslation = useLibraryStore((s) => s.skipLiteralTranslation);
-  const revertToLiteralTranslation = useLibraryStore((s) => s.revertToLiteralTranslation);
-  // Scoped to the song it belongs to so a stale value from a song just navigated away from is
-  // never mistaken for the current one — cheaper and lint-cleaner than resetting it on every
+  const applyLiteralTranslation = useLibraryStore((s) => s.applyLiteralTranslation);
+  // Both scoped to the song they belong to so a stale value from a song just navigated away from
+  // is never mistaken for the current one — cheaper and lint-cleaner than resetting them on every
   // effect run just to cover that one transition.
   const [translating, setTranslating] = useState<{ songId: string; side: Side } | null>(null);
-  // Identifies the latest attempt; a completion/finally only acts if it's still the one in
-  // abortRef — so a superseded request (song switched away from, or the user re-clicked
-  // "Traduzir com IA" before the first attempt landed) can't clobber state that no longer belongs
-  // to it.
+  const [failure, setFailure] = useState<{ songId: string; side: Side; message: string } | null>(null);
+  // Identifies the latest attempt; a completion only acts if it's still the one in abortRef — so a
+  // superseded request (song switched away from, or the user re-clicked "Traduzir com IA" before
+  // the first attempt landed) can't clobber state that no longer belongs to it.
   const abortRef = useRef<AbortController | null>(null);
 
   function start(songId: string, side: Side, knownText: string) {
@@ -46,6 +46,7 @@ export function useAutoLiteralTranslation(song: Song | null) {
 
     async function run() {
       setTranslating({ songId, side });
+      setFailure(null);
       try {
         const translated = await postJsonAs(
           "/api/translate-literally",
@@ -57,12 +58,11 @@ export function useAutoLiteralTranslation(song: Song | null) {
           realignedLyricsReplySchema,
           { signal: controller.signal },
         );
-        applyAiRealignment(translated, side);
+        // A reply that arrives just as the user cancels (or switches songs) must not land.
+        if (!controller.signal.aborted) applyLiteralTranslation(side, translated);
       } catch (err) {
-        // AbortError means cancel() already marked this "skipped" — don't do it twice.
-        if (!(err instanceof DOMException && err.name === "AbortError")) {
-          skipLiteralTranslation(side);
-        }
+        // A cancel isn't a failure to report; the side simply stays as it was.
+        if (!controller.signal.aborted) setFailure({ songId, side, message: errorMessage(err) });
       } finally {
         if (abortRef.current === controller) {
           setTranslating(null);
@@ -71,7 +71,6 @@ export function useAutoLiteralTranslation(song: Song | null) {
       }
     }
     void run();
-    return controller;
   }
 
   // Nothing here starts a translation — only cancels one already in flight if the user navigates
@@ -82,23 +81,21 @@ export function useAutoLiteralTranslation(song: Song | null) {
   }, [song?.id]);
 
   const translatingSide = translating && song && translating.songId === song.id ? translating.side : null;
+  const translationFailure =
+    failure && song && failure.songId === song.id ? { side: failure.side, message: failure.message } : null;
 
-  const cancel = () => {
-    if (!abortRef.current || !translatingSide) return;
-    skipLiteralTranslation(translatingSide);
-    abortRef.current.abort();
-  };
+  const cancel = () => abortRef.current?.abort();
 
-  /** LyricsEditors' "Traduzir com IA" — drops whatever this side currently has (a picked
-   * recording, an existing translation, doesn't matter) and starts a fresh literal translation
-   * from the other side's current text. */
+  const dismissFailure = () => setFailure(null);
+
+  /** LyricsEditors' "Traduzir com IA" — starts a fresh literal translation of this side from the
+   * other side's current text. Whatever this side has now (a picked recording, an existing
+   * translation) stays until the new translation lands. */
   const retranslate = (side: Side) => {
     if (!song) return;
     const knownSide: Side = side === "languageA" ? "languageB" : "languageA";
-    const knownText = song[knownSide];
-    revertToLiteralTranslation(side);
-    start(song.id, side, knownText);
+    start(song.id, side, song[knownSide]);
   };
 
-  return { translatingSide, cancel, retranslate };
+  return { translatingSide, translationFailure, cancel, dismissFailure, retranslate };
 }

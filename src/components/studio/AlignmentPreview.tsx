@@ -79,7 +79,9 @@ function cnIconBtn(active: boolean) {
   ].join(" ");
 }
 
-export function AlignmentPreview({ song }: { song: Song }) {
+/** `locked` while a "Traduzir com IA" runs: its reply replaces the whole alignment, so an edit made
+ * meanwhile would be lost. */
+export function AlignmentPreview({ song, locked }: { song: Song; locked: boolean }) {
   const updateSong = useLibraryStore((s) => s.updateSong);
   const linesPerSlide = song.exportOptions.linesPerSlide;
 
@@ -129,7 +131,11 @@ export function AlignmentPreview({ song }: { song: Song }) {
         <span className="w-[168px] shrink-0" />
       </div>
 
-      <div className="mt-2 space-y-2">
+      <fieldset
+        disabled={locked}
+        aria-busy={locked}
+        className={locked ? "mt-2 min-w-0 space-y-2 opacity-60" : "mt-2 min-w-0 space-y-2"}
+      >
         {slideChunks.map((chunk) => {
           const firstRow = chunk[0];
           return (
@@ -143,7 +149,7 @@ export function AlignmentPreview({ song }: { song: Song }) {
             </Fragment>
           );
         })}
-      </div>
+      </fieldset>
     </Card>
   );
 }

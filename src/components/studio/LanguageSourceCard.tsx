@@ -37,18 +37,20 @@ export function LanguageSourceCard({
   song,
   side,
   label,
-  translating = false,
+  translatingSide,
 }: {
   song: Song;
   side: Side;
   label: string;
-  /** Set by useAutoLiteralTranslation (via StudioShell) while it's filling this side
-   * automatically — disables "Buscar" so a manually-picked recording can't be raced and
-   * overwritten by the AI result landing after it. The loading/cancel UI itself lives next to the
-   * textbox instead (see LyricsEditors' EditorPanel), not here. */
-  translating?: boolean;
+  /** The side a "Traduzir com IA" the user clicked is filling in right now, if any (via
+   * StudioShell). Disables "Buscar" on both cards: the translation rewrites both sides' text when it
+   * lands, so a recording picked meanwhile would lose its text (and, on the other side, keep only
+   * its name here). The loading/cancel UI itself lives next to the textbox instead (see
+   * LyricsEditors' EditorPanel), not here. */
+  translatingSide: Side | null;
 }) {
   const replaceSide = useLibraryStore((s) => s.replaceSide);
+  const translating = translatingSide === side;
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export function LanguageSourceCard({
         <Button
           variant="secondary"
           size="sm"
-          disabled={translating}
+          disabled={translatingSide !== null}
           onClick={() => {
             setError(null);
             setDialogOpen(true);
