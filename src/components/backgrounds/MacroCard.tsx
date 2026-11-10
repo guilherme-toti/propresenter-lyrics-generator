@@ -3,7 +3,7 @@
 import { useState, type ReactNode } from "react";
 import { Card } from "@/components/ui/Card";
 import type { MacroMedia } from "@/lib/propresenter/backgrounds/slots";
-import { DismissibleAlert } from "./DismissibleAlert";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 import { MacroTestButton } from "./MacroTestButton";
 import { EmptyScreen, type ScreenRole } from "./ScreenFrame";
 

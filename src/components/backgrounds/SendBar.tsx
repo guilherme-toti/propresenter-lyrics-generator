@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { CheckCircle2, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { SendProgress, SendSummary } from "@/lib/backgrounds/useDraftActions";
-import { DismissibleAlert } from "./DismissibleAlert";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 
 interface SendBarProps {
   stagedCount: number;

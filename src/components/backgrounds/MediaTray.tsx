@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/Button";
 import { cn } from "@/lib/cn";
 import { trayPreviewUrl } from "@/lib/backgrounds/api";
 import type { TrayFile, TrayRefusal } from "@/lib/propresenter/backgrounds/tray";
-import { DismissibleAlert } from "./DismissibleAlert";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 import { MediaPreview } from "./MediaPreview";
 
 type PointerHandlers = Record<

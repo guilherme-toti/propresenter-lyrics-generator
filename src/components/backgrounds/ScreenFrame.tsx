@@ -8,7 +8,7 @@ import type { HistoryStep } from "@/lib/backgrounds/links";
 import { planReplacement } from "@/lib/propresenter/backgrounds/media";
 import type { MediaSlot } from "@/lib/propresenter/backgrounds/slots";
 import type { TrayFile } from "@/lib/propresenter/backgrounds/tray";
-import { DismissibleAlert } from "./DismissibleAlert";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 import { MediaPreview } from "./MediaPreview";
 
 export type ScreenRole = "background" | "prop";

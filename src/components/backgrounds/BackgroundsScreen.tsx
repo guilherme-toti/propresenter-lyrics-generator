@@ -32,7 +32,7 @@ import { useTrayPointerDrag } from "@/lib/backgrounds/useTrayPointerDrag";
 import { useDesktopStore } from "@/lib/desktopStore";
 import type { BackgroundsOverview, MacroMedia } from "@/lib/propresenter/backgrounds/slots";
 import { ClearScreenButton } from "./ClearScreenButton";
-import { DismissibleAlert } from "./DismissibleAlert";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 import { LinkScreenModal, type LinkedScreen, type LinkTarget } from "./LinkScreenModal";
 import { MacroCard } from "./MacroCard";
 import { MediaTray } from "./MediaTray";
