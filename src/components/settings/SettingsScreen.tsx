@@ -49,7 +49,9 @@ function SettingRow({
 }) {
   return (
     <div className="grid grid-cols-[auto_minmax(0,1fr)_minmax(0,24rem)] items-start gap-x-3 px-5 py-5">
-      <span className="mt-0.5 flex">
+      {/* relative: holds the screen-reader label, which is absolutely positioned, in the row
+          instead of letting it stretch the page and add a second scrollbar. */}
+      <span className="relative mt-0.5 flex">
         <SettingStatus done={done} />
       </span>
       <div>
