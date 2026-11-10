@@ -1,8 +1,8 @@
 /**
- * Musixmatch is the *source of truth* for lyrics: a licensed database, looked up by title and
- * artist, replacing "ask a model to remember the words". The model still identifies which song
- * is meant and aligns two language versions against each other — the fuzzy work it's good at —
- * but it no longer authors any lyric text when Musixmatch has the song.
+ * Musixmatch is the *source of truth* for lyrics: a licensed database, searched by title, artist
+ * or a lyric snippet. A generated song is built from it alone — the picked recording's lyrics and,
+ * when it lines up line for line, Musixmatch's own translation of them; no model writes or
+ * translates that text (see generateSongWithAi in openrouter.ts).
  *
  * Using the API carries obligations (docs.musixmatch.com/lyrics-views-tracking): wherever the
  * lyrics are shown, the returned `lyrics_copyright` must be visible and one of the tracking
@@ -129,7 +129,9 @@ async function call<T>(path: string, params: Record<string, string>): Promise<T>
   throw new MusixmatchError("unavailable");
 }
 
-/** `call` for the lyrics lookups, whose callers fall back to the model on any failure. */
+/** `call` for the lyrics and translation lookups, whose callers treat any failure as "nothing to
+ * use": lyrics that can't be fetched ask the user to pick another recording, and a missing
+ * translation leaves the other side blank. */
 async function request<T>(path: string, params: Record<string, string>): Promise<T | null> {
   try {
     return await call<T>(path, params);
@@ -140,11 +142,10 @@ async function request<T>(path: string, params: Record<string, string>): Promise
 }
 
 /**
- * Finds real songs from the user's raw query. `q` searches titles, artists *and* lyrics at once,
- * which is exactly the shape of what the app asks for ("a title, a lyric snippet, or a short
- * description") — so a half-remembered line finds the song without anyone having to know its
- * name. This is what lets a song the model has never heard of still be found: the catalogue
- * answers "does this exist", and the model is left to choose among things that really do.
+ * Finds real recordings from the user's raw query: a title or a lyric snippet, which is what the
+ * search box asks for ("Título da música ou um trecho da letra") — so a half-remembered line finds
+ * the song without anyone having to know its name. The catalogue answers "does this exist", and
+ * the user picks the exact recording among things that really do (see /api/songs/search).
  */
 export async function searchTracks(query: string): Promise<TrackCandidate[]> {
   if (!query.trim()) return [];
@@ -282,22 +283,9 @@ function stripNonLyricFooter(body: string): string {
 }
 
 /**
- * Looks up one recording's lyrics. Returns null whenever the song can't be used — no key
- * configured, no match, restricted content, quota exhausted, network trouble — so every caller
- * can simply fall back to asking the model.
- */
-export async function fetchLyrics(title: string, artist: string): Promise<MusixmatchLyrics | null> {
-  if (!title.trim()) return null;
-  const payload = await request<MusixmatchEnvelope>("matcher.lyrics.get", {
-    q_track: title,
-    ...(artist.trim() ? { q_artist: artist } : {}),
-  });
-  return readLyrics(payload, `${title} — ${artist}`);
-}
-
-/**
- * Exact lookup for a track already chosen from search results — no fuzzy title matching to get
- * wrong a second time.
+ * The lyrics of a recording already picked from search results, looked up by its exact catalogue
+ * ID. Returns null whenever they can't be used — no key configured, not found, restricted content,
+ * quota exhausted, network trouble.
  */
 export async function fetchLyricsByTrackId(commontrackId: number): Promise<MusixmatchLyrics | null> {
   const payload = await request<MusixmatchEnvelope>("track.lyrics.get", {
@@ -326,10 +314,11 @@ interface TranslationEnvelope {
  * Musixmatch's own translation of a specific recording's lyrics — literal/mechanical, not the
  * officially recorded adapted version (confirmed by probing: asking for Hillsong "Oceans" in `pt`
  * returns a word-for-word rendering, not the real sung "Oceanos"). Coverage is inconsistent too —
- * empty/restricted for less mainstream catalogue entries. So this is a fallback source, never a
- * replacement for finding a real official recording — see generateSongWithAi in openrouter.ts.
- * Returns null on the same conditions as fetchLyrics/fetchLyricsByTrackId: no key, no match,
- * restricted, quota, network trouble.
+ * empty/restricted for less mainstream catalogue entries. generateSongWithAi (openrouter.ts) fills
+ * the other side with it only when it pairs line for line, and leaves that side blank otherwise;
+ * an officially recorded version is for the user to pick with that side's "Buscar".
+ * Returns null on the same conditions as fetchLyricsByTrackId: no key, not found, restricted,
+ * quota, network trouble.
  */
 export async function fetchTranslation(
   commontrackId: number,
@@ -384,8 +373,8 @@ function readLyrics(payload: MusixmatchEnvelope | null, label: string): Musixmat
 
 /**
  * Musixmatch returns a plain lyric body: lines separated by newlines, sections by blank lines,
- * with no section names. No model ever sees this song on the Musixmatch-translation path
- * (pairLineAligned below), so these generic "Parte N" labels are final.
+ * with no section names. Generation never asks a model to name them, so a generated song keeps
+ * these generic "Parte N" labels until the user retitles them or runs "Realinhar com IA".
  */
 export function splitIntoSections(text: string): { label: string; lines: string[] }[] {
   return text
@@ -401,8 +390,8 @@ export function splitIntoSections(text: string): { label: string; lines: string[
  * probing). That means it can be paired with the original by position alone — no AI needed —
  * whenever the two actually line up. Returns null (never a best-effort partial pairing) when they
  * don't: a section-count or line-count mismatch means this isn't really a line-for-line rendering
- * of this exact body, and the caller should fall back to an AI translation instead of showing
- * misaligned lines.
+ * of this exact body, so generateSongWithAi leaves that side blank rather than showing misaligned
+ * lines. /api/translate-literally checks "Traduzir com IA"'s result the same way.
  */
 export function pairLineAligned(
   originalText: string,
