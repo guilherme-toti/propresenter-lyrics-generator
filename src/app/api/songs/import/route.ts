@@ -21,6 +21,7 @@ export async function POST(request: Request) {
     const imported = await importSongFromProFile(buffer);
     const song = createEmptySong({
       title: imported.title,
+      artist: imported.artist,
       mode: "manual",
       languageA: imported.languageA,
       languageB: imported.languageB,

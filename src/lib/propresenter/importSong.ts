@@ -2,20 +2,21 @@ import { alignmentToRaw, buildAlignmentFromManual } from "@/lib/alignment";
 import type { AlignedLine } from "@/lib/types";
 import { classifyLineLanguages } from "@/lib/ai/openrouter";
 import { decodeProFile } from "./decode";
+import { artistFromCredits } from "./importedArtist";
 import { buildBilingualAlignment, buildRawTextFromTags, classifyCueLines } from "./languageDetect";
 
 export interface ImportedSong {
   title: string;
+  artist: string;
   languageA: string;
   languageB: string;
   alignment: AlignedLine[];
 }
 
-/** Decodes a .pro file buffer and turns it into ready-to-edit song data —
- * same shape generateSongWithAi() produces, so the caller (see
- * /api/songs/import) can feed it straight into createEmptySong(). */
+/** Decodes a .pro file buffer and turns it into ready-to-edit song data, in the fields
+ * createEmptySong() takes, so the caller (see /api/songs/import) can feed it straight in. */
 export async function importSongFromProFile(buffer: Buffer): Promise<ImportedSong> {
-  const { title, cueLines } = await decodeProFile(buffer);
+  const { title, author, artistCredits, cueLines } = await decodeProFile(buffer);
   const { isBilingual, dominantLanguage, lineTags } = classifyCueLines(cueLines);
 
   const resolvedTags: ("pt" | "en")[][] = lineTags.map((tags) =>
@@ -57,5 +58,5 @@ export async function importSongFromProFile(buffer: Buffer): Promise<ImportedSon
     alignment = buildAlignmentFromManual(languageA, languageB);
   }
 
-  return { title, languageA, languageB, alignment };
+  return { title, artist: artistFromCredits({ author, artistCredits }), languageA, languageB, alignment };
 }
