@@ -3,10 +3,12 @@ import {
   addTrayFilesReplySchema,
   backgroundsOverviewSchema,
   detectedFolderReplySchema,
+  separateSlotReplySchema,
   slotChangeReplySchema,
   type AddTrayFilesReply,
   type BackgroundsOverview,
   type MediaSlot,
+  type SeparateSlotReply,
 } from "@/lib/propresenter/backgrounds/contracts";
 import type {
   AddTrayFilesRequest,
@@ -14,6 +16,7 @@ import type {
   FolderRequest,
   RedoSlotRequest,
   ReplaceSlotRequest,
+  SeparateSlotRequest,
   TriggerMacroRequest,
   UndoSlotRequest,
 } from "@/lib/propresenter/backgrounds/requests";
@@ -61,6 +64,10 @@ export function undoBackgroundSlot(request: UndoSlotRequest): Promise<MediaSlot>
 
 export function redoBackgroundSlot(request: RedoSlotRequest): Promise<MediaSlot> {
   return postSlotChange("/api/backgrounds/redo", request);
+}
+
+export function separateBackgroundSlot(request: SeparateSlotRequest): Promise<SeparateSlotReply> {
+  return postJsonAs("/api/backgrounds/separate", request, separateSlotReplySchema);
 }
 
 /** /trigger and /clear answer 200 with `ok: false` when ProPresenter can't be reached. */

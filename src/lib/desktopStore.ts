@@ -11,7 +11,6 @@ const persistedDesktopStateSchema = z.object({
   activePlaylist: playlistRefSchema.nullable().optional(),
   knownPlaylistIds: z.array(z.string()).optional(),
   proApiPort: portSchema.nullable().optional(),
-  backgroundLinks: z.record(z.string(), z.string()).optional(),
 });
 
 interface DesktopState {
@@ -31,10 +30,6 @@ interface DesktopState {
   playlistsBaselined: boolean;
   activePlaylist: PlaylistRef | null;
   knownPlaylistIds: string[];
-  /** Backgrounds screens linked by the user, as follower slot id → the slot it follows: a file
-   * staged on the followed screen is staged on its followers too ("Palavra Bíblia segue
-   * Palavra"). Slot ids come from file paths, so links belong to this computer's workspace. */
-  backgroundLinks: Record<string, string>;
 
   setLibraryFolder: (folder: string | null) => void;
   setProPresenterFolder: (folder: string | null) => void;
@@ -42,8 +37,6 @@ interface DesktopState {
   setActivePlaylist: (playlist: PlaylistRef | null) => void;
   rememberKnownPlaylists: (ids: string[]) => void;
   markPlaylistsBaselined: () => void;
-  /** Null unlinks the follower. */
-  setBackgroundLink: (followerSlotId: string, leaderSlotId: string | null) => void;
 }
 
 export const useDesktopStore = create<DesktopState>()(
@@ -55,7 +48,6 @@ export const useDesktopStore = create<DesktopState>()(
       playlistsBaselined: false,
       activePlaylist: null,
       knownPlaylistIds: [],
-      backgroundLinks: {},
 
       setLibraryFolder: (folder) => set({ libraryFolder: folder }),
 
@@ -71,18 +63,12 @@ export const useDesktopStore = create<DesktopState>()(
         set((state) => ({ knownPlaylistIds: Array.from(new Set([...state.knownPlaylistIds, ...ids])) })),
 
       markPlaylistsBaselined: () => set({ playlistsBaselined: true }),
-
-      setBackgroundLink: (followerSlotId, leaderSlotId) =>
-        set((state) => {
-          const others = Object.fromEntries(
-            Object.entries(state.backgroundLinks).filter(([follower]) => follower !== followerSlotId),
-          );
-          return { backgroundLinks: leaderSlotId ? { ...others, [followerSlotId]: leaderSlotId } : others };
-        }),
     }),
     {
       name: "lyrics-studio-desktop",
-      version: 0,
+      // 1 dropped the Backgrounds screen links. A version change is what makes zustand run
+      // migrate, whose parse leaves out every key the schema no longer lists.
+      version: 1,
       migrate: (persistedState) => {
         const parsed = persistedDesktopStateSchema.safeParse(persistedState);
         return parsed.success ? parsed.data : {};

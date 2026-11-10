@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { numberedFileName } from "@/lib/fileNames";
 
 async function fileExists(target: string): Promise<boolean> {
   try {
@@ -16,12 +17,9 @@ async function fileExists(target: string): Promise<boolean> {
  * clobber an existing presentation. Returns the final absolute path.
  */
 export async function writeUniqueFile(folder: string, fileName: string, data: Buffer): Promise<string> {
-  const ext = path.extname(fileName);
-  const base = fileName.slice(0, fileName.length - ext.length);
-
   let candidate = fileName;
   for (let attempt = 2; await fileExists(path.join(folder, candidate)); attempt += 1) {
-    candidate = `${base} (${attempt})${ext}`;
+    candidate = numberedFileName(fileName, attempt);
   }
 
   const fullPath = path.join(folder, candidate);

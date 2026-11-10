@@ -17,6 +17,11 @@ const nextConfig: NextConfig = {
   outputFileTracingIncludes: {
     "/api/**": ["./vendor/propresenter7-proto/proto/**/*"],
   },
+  experimental: {
+    // proxy.ts guards /api/*, and with a proxy Next buffers request bodies up to this size (10 MB
+    // by default). A still video sent as base64 can pass that; see MAX_STILL_VIDEO_BYTES.
+    proxyClientMaxBodySize: "40mb",
+  },
 };
 
 export default nextConfig;

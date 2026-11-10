@@ -1,26 +1,26 @@
 "use client";
 
-import { ArrowDownToLine, Ban, Check, Link2, Loader2, MoreHorizontal, Redo2, Sparkles, Undo2, X } from "lucide-react";
+import { ArrowDownToLine, Ban, Check, Files, Film, Loader2, Redo2, Sparkles, Split, Undo2, X } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { slotDropTargetProps } from "@/lib/backgrounds/dropTargets";
 import type { ScreenNotice } from "@/lib/backgrounds/draftStore";
-import type { HistoryStep } from "@/lib/backgrounds/links";
+import type { HistoryStep } from "@/lib/backgrounds/useDraftActions";
 import { planReplacement } from "@/lib/propresenter/backgrounds/media";
+import type { ScreenRole } from "@/lib/propresenter/backgrounds/requests";
 import type { MediaSlot } from "@/lib/propresenter/backgrounds/slots";
 import type { TrayFile } from "@/lib/propresenter/backgrounds/tray";
-import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { MediaPreview } from "./MediaPreview";
 
-export type ScreenRole = "background" | "prop";
-
-/** "elsewhere" while a file is being dragged but not over this screen (or a screen it changes
- * with); "here" when it is. */
+/** "elsewhere" while a file is being dragged but not over this screen (or another screen showing
+ * the same file); "here" when it is. */
 export type FrameDragState = "none" | "elsewhere" | "here";
 
-/** The church's main screen is square and its side panels are tall; files come ready for them. */
-const ROLE_FRAME: Record<ScreenRole, { label: string; aspect: string; sizes: string }> = {
-  background: { label: "Fundo", aspect: "aspect-square", sizes: "(min-width: 640px) 220px, 60vw" },
-  prop: { label: "Prop", aspect: "aspect-[9/16]", sizes: "(min-width: 640px) 130px, 35vw" },
+/** The church's central screen is 16:9 and its side panels are tall; files come ready for them.
+ * `name` goes after "a"/"na" in what's read out ("Trocar a tela central de WELCOME"). */
+const ROLE_FRAME: Record<ScreenRole, { label: string; name: string; aspect: string; sizes: string }> = {
+  background: { label: "Central", name: "tela central", aspect: "aspect-video", sizes: "480px" },
+  prop: { label: "Lateral", name: "tela lateral", aspect: "aspect-[9/16]", sizes: "160px" },
 };
 
 const namesList = new Intl.ListFormat("pt-BR", { style: "long", type: "conjunction" });
@@ -30,7 +30,8 @@ const namesList = new Intl.ListFormat("pt-BR", { style: "long", type: "conjuncti
 export function refusalLabel(slot: MediaSlot, fileName: string): string | null {
   const plan = planReplacement(slot, fileName);
   if (plan.action !== "refuse") return null;
-  if (plan.reason === "media-mismatch") return slot.mediaType === "video" ? "Aqui vai um vídeo" : "Aqui vai uma imagem";
+  // Only a video onto an image screen: an image onto a video screen becomes a video.
+  if (plan.reason === "media-mismatch") return "Aqui vai uma imagem";
   return "Esse arquivo não serve aqui";
 }
 
@@ -55,10 +56,8 @@ interface ScreenFrameProps {
   previewSrc: string;
   staged: { file: TrayFile; src: string } | null;
   notice: ScreenNotice | null;
-  /** The other macros a change here also shows up in. */
-  alsoIn: string[];
-  /** The macros showing the screen this one follows, when the user linked it to one. */
-  follows: string[] | null;
+  /** The other macros showing this same file, which a change here changes too. */
+  sharedWith: string[];
   dragState: FrameDragState;
   /** A tray file is picked and waiting for the screen it goes on. */
   armed: boolean;
@@ -72,7 +71,10 @@ interface ScreenFrameProps {
   onUndo: () => void;
   onRedo: () => void;
   onDismissNotice: () => void;
-  onEditLink: () => void;
+  /** Gives this macro's screen a file of its own. */
+  onSeparate: () => void;
+  /** Gives this image screen its image as a still video, to set it up as a video in ProPresenter. */
+  onTurnIntoVideo: () => void;
 }
 
 /** One of a macro's screens: what it shows now, or the file staged for it. */
@@ -83,8 +85,7 @@ export function ScreenFrame({
   previewSrc,
   staged,
   notice,
-  alsoIn,
-  follows,
+  sharedWith,
   dragState,
   armed,
   refusal,
@@ -95,10 +96,13 @@ export function ScreenFrame({
   onUndo,
   onRedo,
   onDismissNotice,
-  onEditLink,
+  onSeparate,
+  onTurnIntoVideo,
 }: ScreenFrameProps) {
   const frame = ROLE_FRAME[role];
   const shownName = staged?.file.fileName ?? slot.fileName;
+  const becomesVideo = staged !== null && planReplacement(slot, staged.file.fileName).action === "encode-video";
+  const canTurnIntoVideo = slot.mediaType === "image" && slot.exists;
 
   return (
     <div className="flex min-w-0 flex-col gap-2">
@@ -108,7 +112,7 @@ export function ScreenFrame({
           {...slotDropTargetProps(slot.id)}
           onClick={onActivate}
           disabled={busy !== null}
-          aria-label={armed ? `Pôr o arquivo escolhido no ${frame.label.toLowerCase()} de ${macroName}` : `Trocar o ${frame.label.toLowerCase()} de ${macroName}`}
+          aria-label={armed ? `Pôr o arquivo escolhido na ${frame.name} de ${macroName}` : `Trocar a ${frame.name} de ${macroName}`}
           title={armed ? "Clique para pôr aqui" : "Clique para escolher um arquivo"}
           className={cn(
             "group relative block w-full overflow-hidden rounded-lg bg-ink outline-offset-2 transition-[outline-color] disabled:cursor-wait",
@@ -175,7 +179,7 @@ export function ScreenFrame({
             <button
               type="button"
               onClick={onUnstage}
-              aria-label={`Manter o ${frame.label.toLowerCase()} atual de ${macroName}`}
+              aria-label={`Manter a ${frame.name} atual de ${macroName}`}
               title="Manter o atual"
               className="absolute right-1.5 top-1.5 rounded-full bg-ink/70 p-1 text-cream-50 transition-colors hover:bg-ink"
             >
@@ -192,37 +196,56 @@ export function ScreenFrame({
       </div>
 
       <div className="flex min-w-0 flex-col gap-1">
-        <div className="flex items-center justify-between gap-1">
-          <p className="text-sm font-medium text-ink">{frame.label}</p>
-          <button
-            type="button"
-            onClick={onEditLink}
-            aria-label={`Ligar o ${frame.label.toLowerCase()} de ${macroName} a outra tela`}
-            title="Ligar a outra tela"
-            className="-mr-1 shrink-0 rounded-full p-1 text-ink/45 transition-colors hover:bg-ink/5 hover:text-ink"
-          >
-            <MoreHorizontal size={16} />
-          </button>
-        </div>
-        <p className="truncate text-sm text-ink/55" title={shownName}>
-          {shownName}
-        </p>
-        {follows && (
+        <p className="text-sm font-medium text-ink">{frame.label}</p>
+        {/* Whole, wrapped: a copy "Separar" made ends in its macro's name, which a cut-off name
+            would hide in the narrow lateral column. */}
+        <p className="break-words text-sm text-ink/55">{shownName}</p>
+        {becomesVideo && (
           <p className="flex items-start gap-1 text-sm text-ink/60">
-            <Link2 size={14} aria-hidden className="mt-1 shrink-0" />
-            <span>Segue {namesList.format(follows)}</span>
+            <Film size={14} aria-hidden className="mt-1 shrink-0" />
+            <span className="min-w-0">Vira vídeo ao enviar</span>
           </p>
         )}
-        {alsoIn.length > 0 && (
-          <p className="flex items-start gap-1 text-sm text-ink/60">
-            <Link2 size={14} aria-hidden className="mt-1 shrink-0" />
-            <span>Muda junto com {namesList.format(alsoIn)}</span>
+        {sharedWith.length > 0 && (
+          <p className="flex items-start gap-1 text-sm text-ink/60" title="Trocar aqui troca nessas também">
+            <Files size={14} aria-hidden className="mt-1 shrink-0" />
+            {/* min-w-0 and break-words: a long macro name in the narrow lateral column wraps
+                instead of running past it. */}
+            <span className="min-w-0 break-words">Mesmo arquivo de {namesList.format(sharedWith)}</span>
           </p>
+        )}
+        {(sharedWith.length > 0 || canTurnIntoVideo) && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            {sharedWith.length > 0 && (
+              <button
+                type="button"
+                onClick={onSeparate}
+                disabled={busy !== null}
+                title="Dá a esta tela um arquivo só dela"
+                className={HISTORY_BUTTON_CLASSES}
+              >
+                <Split size={14} aria-hidden />
+                Separar
+              </button>
+            )}
+            {canTurnIntoVideo && (
+              <button
+                type="button"
+                onClick={onTurnIntoVideo}
+                disabled={busy !== null}
+                title="Deixa esta tela como vídeo, pra ela aceitar imagens e vídeos"
+                className={HISTORY_BUTTON_CLASSES}
+              >
+                <Film size={14} aria-hidden />
+                Virar vídeo
+              </button>
+            )}
+          </div>
         )}
         {notice?.tone === "error" && (
-          <DismissibleAlert variant="inline" onDismiss={onDismissNotice}>
+          <InlineMessage tone="error" onDismiss={onDismissNotice}>
             {notice.message}
-          </DismissibleAlert>
+          </InlineMessage>
         )}
         {/* Shown whenever a saved file is waiting, not just right after a send or an undo: both
             have to survive leaving the screen or restarting the app. */}
@@ -259,7 +282,7 @@ export function ScreenFrame({
   );
 }
 
-/** Where a macro shows nothing in that role, so its card keeps the same shape as the others. */
+/** Where a macro shows nothing in that role, so its row keeps the same shape as the others. */
 export function EmptyScreen({ role }: { role: ScreenRole }) {
   const frame = ROLE_FRAME[role];
   return (
@@ -270,7 +293,7 @@ export function EmptyScreen({ role }: { role: ScreenRole }) {
           frame.aspect,
         )}
       >
-        Sem {frame.label.toLowerCase()}
+        Sem {frame.name}
       </div>
     </div>
   );

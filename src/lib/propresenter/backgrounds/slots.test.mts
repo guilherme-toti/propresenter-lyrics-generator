@@ -144,7 +144,46 @@ test("leaves out macros with no media or prop actions, and media that isn't an i
       { uuid: { string: "D4000000-0000-0000-0000-000000000003" }, name: "Sem ações" },
     ],
   };
-  assert.deepEqual(mapMacroMedia(macros, {}, { windows: false }), { slots: [], macros: [] });
+  assert.deepEqual(mapMacroMedia(macros, {}, { windows: false }), { slots: [], macros: [], propUses: [], videoLengths: {} });
+});
+
+test("names the prop each macro shows, so two macros showing the very same prop can be told apart", () => {
+  const props: DecodedPropDocument = {
+    cues: [{ ...propCue(LOGO_PROP, `${ASSETS}/logo.png`), name: " Logo PMA " }, propCue(VERSE_PROP, `${ASSETS}/versiculo.png`)],
+  };
+  const { slots, propUses } = mapMacroMedia(serviceMacros, props, { windows: false });
+  const nameOf = (id: string) => slots.find((slot) => slot.id === id)?.fileName;
+  assert.deepEqual(
+    propUses.map((use) => [use.macroUuid.slice(-1), use.propUuid, use.propName, use.slotIds.map(nameOf)]),
+    [
+      ["1", LOGO_PROP, "Logo PMA", ["logo.png"]],
+      // No name on the prop itself: the macro's action names it.
+      ["2", VERSE_PROP, "Versículo", ["versiculo.png"]],
+      ["3", VERSE_PROP, "Versículo", ["versiculo.png"]],
+      ["4", LOGO_PROP, "Logo PMA", ["logo.png"]],
+    ],
+  );
+});
+
+test("keeps how long ProPresenter believes each macro's videos are, by macro and slot", () => {
+  const timedVideo = (url: string, endPoint: number, outPoint = endPoint): DecodedMedia => ({
+    url: { absoluteString: url },
+    video: { transport: { outPoint, endPoint } },
+  });
+  const macros: DecodedMacrosDocument = {
+    macros: [
+      { uuid: { string: "E5000000-0000-0000-0000-000000000001" }, name: "Início", actions: [mediaAction(timedVideo(`${ASSETS}/loop.mp4`, 10))] },
+      // Trimmed to stop at 8 s: the end, 20 s, is still the file's length as ProPresenter knows it.
+      { uuid: { string: "E5000000-0000-0000-0000-000000000002" }, name: "Fim", actions: [mediaAction(timedVideo(`${ASSETS}/loop.mp4`, 20, 8)), mediaAction(imageMedia(`${ASSETS}/logo.png`))] },
+    ],
+  };
+  const { slots, videoLengths } = mapMacroMedia(macros, {}, { windows: false });
+  const loop = slots.find((slot) => slot.fileName === "loop.mp4")?.id ?? "";
+  // Each macro keeps its own: it was added to each one separately. An image has none.
+  assert.deepEqual(videoLengths, {
+    "E5000000-0000-0000-0000-000000000001": { [loop]: 10 },
+    "E5000000-0000-0000-0000-000000000002": { [loop]: 20 },
+  });
 });
 
 test("a file shown as a background by one macro and inside a prop by another is one slot", () => {
@@ -249,5 +288,5 @@ test("ignores URLs that aren't files on disk", () => {
       },
     ],
   };
-  assert.deepEqual(mapMacroMedia(macros, {}, { windows: false }), { slots: [], macros: [] });
+  assert.deepEqual(mapMacroMedia(macros, {}, { windows: false }), { slots: [], macros: [], propUses: [], videoLengths: {} });
 });

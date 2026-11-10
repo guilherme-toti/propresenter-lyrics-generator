@@ -1,3 +1,4 @@
+import { stripUnsafeFileNameCharacters } from "@/lib/fileNames";
 import type { Song } from "@/lib/types";
 import { buildPresentationObject } from "./build";
 import { getPresentationType } from "./schema";
@@ -14,7 +15,7 @@ export async function encodeSongAsProFile(song: Song): Promise<Buffer> {
  * the export conflict-check/overwrite flow (see ExportOverwriteModal), which lets the user type
  * an arbitrary name that needs the same treatment before it's checked against or written to disk. */
 export function sanitizeFileBaseName(name: string): string {
-  return name.replace(/[\\/:*?"<>|]/g, "").trim() || "Música sem título";
+  return stripUnsafeFileNameCharacters(name) || "Música sem título";
 }
 
 export function proFileName(song: Song): string {

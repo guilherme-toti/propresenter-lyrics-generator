@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Clapperboard,
@@ -16,49 +16,22 @@ import { useAppShellActions } from "@/components/layout/AppShell";
 import { Button } from "@/components/ui/Button";
 import { slotPreviewUrl, trayPreviewUrl } from "@/lib/backgrounds/api";
 import { useBackgroundsDraft } from "@/lib/backgrounds/draftStore";
-import {
-  activeLinks,
-  changeGroup,
-  followersOf,
-  macroNamesShowing,
-  otherMacrosChanged,
-  type ScreenLinks,
-} from "@/lib/backgrounds/links";
+import { otherMacrosShowing } from "@/lib/backgrounds/sharedFiles";
 import { useBackgroundsOverview } from "@/lib/backgrounds/useBackgroundsOverview";
 import { useDetectProPresenterFolder } from "@/lib/backgrounds/useDetectProPresenterFolder";
 import { useDraftActions } from "@/lib/backgrounds/useDraftActions";
 import { useNativeFileDrop } from "@/lib/backgrounds/useNativeFileDrop";
 import { useTrayPointerDrag } from "@/lib/backgrounds/useTrayPointerDrag";
 import { useDesktopStore } from "@/lib/desktopStore";
-import type { BackgroundsOverview, MacroMedia } from "@/lib/propresenter/backgrounds/slots";
+import type { ScreenRole } from "@/lib/propresenter/backgrounds/requests";
+import type { MacroMedia } from "@/lib/propresenter/backgrounds/slots";
 import { ClearScreenButton } from "./ClearScreenButton";
-import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
-import { LinkScreenModal, type LinkedScreen, type LinkTarget } from "./LinkScreenModal";
-import { MacroCard } from "./MacroCard";
+import { InlineMessage } from "@/components/ui/InlineMessage";
+import { MacroRow } from "./MacroRow";
 import { MediaTray } from "./MediaTray";
-import { refusalLabel, ScreenFrame, type FrameDragState, type ScreenRole } from "./ScreenFrame";
+import { refusalLabel, ScreenFrame, type FrameDragState } from "./ScreenFrame";
 import { SendBar } from "./SendBar";
-
-function linkedScreen(slotId: string, overview: BackgroundsOverview): LinkedScreen {
-  return {
-    slotId,
-    macroNames: macroNamesShowing(slotId, overview.macros),
-    fileName: overview.slots.find((slot) => slot.id === slotId)?.fileName ?? "",
-  };
-}
-
-/** Screens the target could follow: the same role (a background follows a background) and kind of
- * file, so a staged file fits both, and not following another screen themselves. */
-function linkCandidates(target: LinkTarget, overview: BackgroundsOverview, links: ScreenLinks): LinkedScreen[] {
-  const mediaType = overview.slots.find((slot) => slot.id === target.slotId)?.mediaType;
-  const slotIds = new Set(
-    overview.macros.flatMap((macro) => (target.role === "background" ? macro.backgrounds : macro.props)),
-  );
-  return [...slotIds]
-    .filter((slotId) => slotId !== target.slotId && links[slotId] === undefined)
-    .filter((slotId) => overview.slots.find((slot) => slot.id === slotId)?.mediaType === mediaType)
-    .map((slotId) => linkedScreen(slotId, overview));
-}
+import { SeparateScreenModal, type SeparateTarget } from "./SeparateScreenModal";
 
 const GHOST_OFFSET_PX = 14;
 /** Closer than this to the bottom, the tag goes above the pointer instead of below it. */
@@ -108,8 +81,6 @@ function LoadingLine({ children }: { children: ReactNode }) {
 export function BackgroundsScreen() {
   const folder = useDesktopStore((s) => s.proPresenterFolder);
   const port = useDesktopStore((s) => s.proApiPort);
-  const savedLinks = useDesktopStore((s) => s.backgroundLinks);
-  const setBackgroundLink = useDesktopStore((s) => s.setBackgroundLink);
   const detecting = useDetectProPresenterFolder();
   const { openSettings } = useAppShellActions();
   const overviewState = useBackgroundsOverview(folder);
@@ -117,12 +88,13 @@ export function BackgroundsScreen() {
   const draft = useBackgroundsDraft();
   const actions = useDraftActions(folder, overviewState);
   const [screenError, setScreenError] = useState<string | null>(null);
-  const [linkTarget, setLinkTarget] = useState<LinkTarget | null>(null);
+  const [separateTarget, setSeparateTarget] = useState<SeparateTarget | null>(null);
   // The last macro run from here. It puts every file it uses on screen, so its card says so.
   const [onScreenMacroUuid, setOnScreenMacroUuid] = useState<string | null>(null);
+  const screensScroller = useRef<HTMLDivElement>(null);
 
   const nativeDrag = useNativeFileDrop((paths, slotId) => void actions.dropFiles(paths, slotId));
-  const trayDrag = useTrayPointerDrag((trayFileId, slotId) => actions.stageOn(slotId, trayFileId));
+  const trayDrag = useTrayPointerDrag((trayFileId, slotId) => actions.stageOn(slotId, trayFileId), screensScroller);
 
   const { selectedTrayFileId, selectTrayFile } = draft;
   useEffect(() => {
@@ -213,11 +185,10 @@ export function BackgroundsScreen() {
 
   const draggedOverSlotId = trayDrag.drag?.overSlotId ?? nativeDrag?.overSlotId ?? null;
   const dragging = trayDrag.drag !== null || nativeDrag !== null;
-  const links = activeLinks(savedLinks, overview.slots);
-  const highlighted = new Set(draggedOverSlotId ? changeGroup(draggedOverSlotId, links) : []);
+  // Every screen showing the dragged-over file lights up: they all change with it.
   const dragStateFor = (slotId: string): FrameDragState => {
     if (!dragging) return "none";
-    return highlighted.has(slotId) ? "here" : "elsewhere";
+    return slotId === draggedOverSlotId ? "here" : "elsewhere";
   };
   const armed = draft.selectedTrayFileId !== null && !dragging;
   // The tray file being dragged or picked, so screens it can't go on say so before it's dropped.
@@ -231,17 +202,27 @@ export function BackgroundsScreen() {
     const change = draft.staged[slotId];
     const stagedFile = change ? trayById.get(change.trayFileId) : undefined;
     const busy = actions.historySteps.get(slotId) ?? (actions.progress && change ? "sending" : null);
+    const sharedWith = otherMacrosShowing(macro.macroUuid, slotId, overview.macros);
+    const previewSrc = slotPreviewUrl(folder, slot);
+    const newFileTarget = {
+      slotId,
+      role,
+      macroUuid: macro.macroUuid,
+      macroName: macro.macroName,
+      fileName: slot.fileName,
+      sharedWith,
+      previewSrc,
+    };
     return (
       <ScreenFrame
         key={`${role}-${slotId}`}
         role={role}
         macroName={macro.macroName}
         slot={slot}
-        previewSrc={slotPreviewUrl(folder, slot)}
+        previewSrc={previewSrc}
         staged={stagedFile ? { file: stagedFile, src: trayPreviewUrl(stagedFile.id) } : null}
         notice={draft.notices[slotId] ?? null}
-        alsoIn={otherMacrosChanged(macro.macroUuid, slotId, overview.macros, links)}
-        follows={links[slotId] ? macroNamesShowing(links[slotId], overview.macros) : null}
+        sharedWith={sharedWith}
         dragState={dragStateFor(slotId)}
         armed={armed}
         refusal={heldFile ? refusalLabel(slot, heldFile.fileName) : null}
@@ -255,96 +236,106 @@ export function BackgroundsScreen() {
         onUndo={() => void actions.undo(slotId)}
         onRedo={() => void actions.redo(slotId)}
         onDismissNotice={() => draft.setNotice(slotId, null)}
-        onEditLink={() => setLinkTarget({ slotId, role, macroName: macro.macroName })}
+        onSeparate={() => setSeparateTarget({ ...newFileTarget, asVideo: false })}
+        onTurnIntoVideo={() => setSeparateTarget({ ...newFileTarget, asVideo: true })}
+
       />
     );
   };
 
   const sendBarVisible = stagedSlotIds.length > 0 || actions.progress !== null || actions.summary !== null;
 
+  const tray = (
+    <MediaTray
+      tray={draft.tray}
+      selectedId={draft.selectedTrayFileId}
+      draggingId={trayDrag.drag?.trayFileId ?? null}
+      receivingFiles={nativeDrag !== null && nativeDrag.overSlotId === null}
+      useCounts={useCounts}
+      refusals={actions.trayRefusals}
+      error={actions.trayError}
+      onPick={() => void actions.pickForTray()}
+      onSelect={(trayFileId) => selectTrayFile(draft.selectedTrayFileId === trayFileId ? null : trayFileId)}
+      onRemove={draft.removeFromTray}
+      onDismissMessages={actions.dismissTrayMessages}
+      pointerHandlersFor={trayDrag.handlersFor}
+      clickGuard={trayDrag.clickGuard}
+    />
+  );
+
+  // Two panes that scroll on their own: the tray stays beside the macros however far down they go.
+  // The macros pane is as wide as a row of two screens and no wider; a wider window grows the tray.
   return (
-    <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 px-4 py-8 sm:px-6">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-        <div className="max-w-xl">
-          <h1 className="font-display text-2xl font-semibold text-ink">Backgrounds</h1>
-          <p className="mt-1 text-base text-ink/60 sm:text-sm">
-            Solte os arquivos da semana e arraste cada um até a tela da macro. O ProPresenter só muda quando você
-            enviar.
-          </p>
+    <div className="flex h-full">
+      {tray}
+
+      <div ref={screensScroller} className="min-w-0 flex-[0_1_46rem] overflow-y-auto">
+        <div className="flex flex-col gap-6 px-6 py-8">
+          <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+            <div className="max-w-xl">
+              <h1 className="font-display text-2xl font-semibold text-ink">Backgrounds</h1>
+              <p className="mt-1 text-base text-ink/60 sm:text-sm">
+                Solte os arquivos da semana e arraste cada um até a tela da macro. O ProPresenter só muda quando você
+                enviar.
+              </p>
+            </div>
+            {/* Kept whole, so the two stay side by side at the right instead of wrapping. */}
+            <div className="flex shrink-0 items-center gap-1">
+              {refreshButton}
+              <ClearScreenButton port={port} onCleared={() => setOnScreenMacroUuid(null)} onError={setScreenError} />
+            </div>
+          </header>
+
+          {!port && (
+            <div className="flex flex-col gap-3 rounded-2xl border border-line bg-cream-100 px-4 py-3 sm:flex-row sm:items-center">
+              <Info size={18} aria-hidden className="shrink-0 text-ink/60" />
+              <p className="flex-1 text-base text-ink/75 sm:text-sm">
+                Pra testar as macros daqui, informe a porta do ProPresenter em Ajustes.
+              </p>
+              {openSettingsButton("ghost")}
+            </div>
+          )}
+
+          {screenError && (
+            <InlineMessage tone="error" variant="boxed" onDismiss={() => setScreenError(null)}>
+              {screenError}
+            </InlineMessage>
+          )}
+
+          <ul aria-label="Macros" className="divide-y divide-line rounded-2xl border border-line bg-white">
+            {overview.macros.map((macro) => (
+              <MacroRow
+                key={macro.macroUuid}
+                folder={folder}
+                macro={macro}
+                port={port}
+                onScreen={macro.macroUuid === onScreenMacroUuid}
+                onShown={setOnScreenMacroUuid}
+                renderFrame={(slotId, role) => renderFrame(macro, slotId, role)}
+              />
+            ))}
+          </ul>
+
+          {sendBarVisible && (
+            <SendBar
+              stagedCount={stagedSlotIds.length}
+              progress={actions.progress}
+              summary={actions.summary}
+              onSend={() => void actions.send()}
+              onDiscard={actions.discard}
+              onDismissSummary={actions.dismissSummary}
+            />
+          )}
         </div>
-        <div className="flex flex-wrap items-center gap-1">
-          {refreshButton}
-          <ClearScreenButton port={port} onCleared={() => setOnScreenMacroUuid(null)} onError={setScreenError} />
-        </div>
-      </header>
-
-      {!port && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-line bg-cream-100 px-4 py-3 sm:flex-row sm:items-center">
-          <Info size={18} aria-hidden className="shrink-0 text-ink/60" />
-          <p className="flex-1 text-base text-ink/75 sm:text-sm">
-            Pra testar as macros daqui, informe a porta do ProPresenter em Ajustes.
-          </p>
-          {openSettingsButton("ghost")}
-        </div>
-      )}
-
-      {screenError && <DismissibleAlert onDismiss={() => setScreenError(null)}>{screenError}</DismissibleAlert>}
-
-      <MediaTray
-        tray={draft.tray}
-        selectedId={draft.selectedTrayFileId}
-        draggingId={trayDrag.drag?.trayFileId ?? null}
-        receivingFiles={nativeDrag !== null && nativeDrag.overSlotId === null}
-        useCounts={useCounts}
-        refusals={actions.trayRefusals}
-        error={actions.trayError}
-        onPick={() => void actions.pickForTray()}
-        onSelect={(trayFileId) => selectTrayFile(draft.selectedTrayFileId === trayFileId ? null : trayFileId)}
-        onRemove={draft.removeFromTray}
-        onDismissMessages={actions.dismissTrayMessages}
-        pointerHandlersFor={trayDrag.handlersFor}
-        clickGuard={trayDrag.clickGuard}
-      />
-
-      <div className="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
-        {overview.macros.map((macro) => (
-          <MacroCard
-            key={macro.macroUuid}
-            macro={macro}
-            port={port}
-            onScreen={macro.macroUuid === onScreenMacroUuid}
-            onShown={setOnScreenMacroUuid}
-            renderFrame={(slotId, role) => renderFrame(macro, slotId, role)}
-          />
-        ))}
       </div>
 
-      <LinkScreenModal
-        target={linkTarget}
-        candidates={linkTarget ? linkCandidates(linkTarget, overview, links) : []}
-        leaderSlotId={linkTarget ? (links[linkTarget.slotId] ?? null) : null}
-        followers={linkTarget ? followersOf(linkTarget.slotId, links).map((id) => linkedScreen(id, overview)) : []}
-        onFollow={(leaderSlotId) => {
-          if (linkTarget) setBackgroundLink(linkTarget.slotId, leaderSlotId);
-          setLinkTarget(null);
-        }}
-        // Closes, rather than switching to the list of screens to follow: that list would land a
-        // row under the pointer, and a double-click would link the two the other way round.
-        onUnlinkFollower={(followerSlotId) => {
-          setBackgroundLink(followerSlotId, null);
-          setLinkTarget(null);
-        }}
-        onClose={() => setLinkTarget(null)}
-      />
-
-      {sendBarVisible && (
-        <SendBar
-          stagedCount={stagedSlotIds.length}
-          progress={actions.progress}
-          summary={actions.summary}
-          onSend={() => void actions.send()}
-          onDiscard={actions.discard}
-          onDismissSummary={actions.dismissSummary}
+      {separateTarget && (
+        <SeparateScreenModal
+          key={`${separateTarget.macroUuid}-${separateTarget.slotId}`}
+          folder={folder}
+          target={separateTarget}
+          onClose={() => setSeparateTarget(null)}
+          onRefresh={reload}
         />
       )}
 

@@ -337,6 +337,38 @@ function fileQueues(): FileQueues {
   return store.__pmaBackgroundsFileQueues;
 }
 
+/** A name `createBeside` never gets past: something is wrong with the names, not the folder. */
+const MAX_NEW_NAME_ATTEMPTS = 100;
+
+/** How a new file gets its contents. Each must fail with EEXIST rather than write over a file. */
+export type NewFileContents = { copyOf: string } | { bytes: Uint8Array };
+
+/**
+ * Creates a file in `folder` under the first name `nameFor(1)`, `nameFor(2)`, … that isn't taken,
+ * and returns that name. Never writes over a file: a taken name is skipped, not replaced.
+ */
+export async function createBeside(
+  folder: string,
+  nameFor: (attempt: number) => string,
+  contents: NewFileContents,
+): Promise<string> {
+  for (let attempt = 1; attempt <= MAX_NEW_NAME_ATTEMPTS; attempt += 1) {
+    const name = nameFor(attempt);
+    const target = path.join(folder, name);
+    try {
+      if ("copyOf" in contents) await fs.copyFile(contents.copyOf, target, constants.COPYFILE_EXCL);
+      else await fs.writeFile(target, contents.bytes, { flag: "wx" });
+      return name;
+    } catch (err) {
+      if (errorCode(err) === "EEXIST") continue;
+      // Past EEXIST the name was free, so whatever is there now is this attempt's partial file.
+      if ("bytes" in contents) await fs.rm(target, { force: true }).catch(() => undefined);
+      throw err;
+    }
+  }
+  throw new Error(`createBeside: no free name after ${MAX_NEW_NAME_ATTEMPTS} attempts`);
+}
+
 /** Runs tasks for the same key one after another, so a replace, an undo and a redo on one file can
  * never interleave their backups and writes. */
 export async function withFileLock<T>(key: string, task: () => Promise<T>): Promise<T> {

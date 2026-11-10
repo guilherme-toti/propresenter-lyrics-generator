@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { contentTypeFor, extensionOf, planReplacement } from "./media.ts";
+import { contentTypeFor, extensionOf, looksLikeMp4, planReplacement } from "./media.ts";
 
 const videoSlot = { mediaType: "video" as const, fileName: "fundo-teste.mp4" };
 const pngSlot = { mediaType: "image" as const, fileName: "prop-teste.png" };
@@ -27,21 +27,29 @@ test("converts an image of another format to the slot's format", () => {
   assert.deepEqual(planReplacement(jpgSlot, "arte.png"), { action: "convert", format: "jpeg" });
 });
 
-test("refuses a video onto an image slot, and the reverse", () => {
+test("refuses a video onto an image slot, pointing at turning the screen into a video", () => {
   const videoOnImage = planReplacement(pngSlot, "clipe.mp4");
-  assert.equal(videoOnImage.action, "refuse");
   assert.equal(videoOnImage.action === "refuse" && videoOnImage.reason, "media-mismatch");
+  assert.match(videoOnImage.action === "refuse" ? videoOnImage.message : "", /Virar vídeo/);
+});
 
-  const imageOnVideo = planReplacement(videoSlot, "foto.png");
-  assert.equal(imageOnVideo.action === "refuse" && imageOnVideo.reason, "media-mismatch");
-  assert.match(imageOnVideo.action === "refuse" ? imageOnVideo.message : "", /MP4/);
+test("an image onto an MP4 slot becomes a video, whatever its format", () => {
+  for (const name of ["foto.png", "foto.JPG", "arte.webp"]) {
+    assert.deepEqual(planReplacement(videoSlot, name), { action: "encode-video" }, name);
+  }
+});
+
+test("an image onto a video slot of another container is refused like a video would be", () => {
+  const plan = planReplacement({ mediaType: "video", fileName: "fundo.mov" }, "foto.png");
+  assert.equal(plan.action === "refuse" && plan.reason, "video-format");
+  assert.match(plan.action === "refuse" ? plan.message : "", /MOV/);
 });
 
 test("refuses file types it can't take, naming what fits the slot", () => {
   for (const name of ["clipe.mov", "foto.heic", "documento.pdf", "sem-extensao"]) {
     const onVideo = planReplacement(videoSlot, name);
     assert.equal(onVideo.action === "refuse" && onVideo.reason, "unsupported-source", name);
-    assert.match(onVideo.action === "refuse" ? onVideo.message : "", /vídeo MP4/);
+    assert.match(onVideo.action === "refuse" ? onVideo.message : "", /vídeo MP4 ou uma imagem/);
 
     const onImage = planReplacement(pngSlot, name);
     assert.equal(onImage.action === "refuse" && onImage.reason, "unsupported-source", name);
@@ -73,4 +81,11 @@ test("serves previews with the type the browser needs", () => {
   assert.equal(contentTypeFor("foto.JPG"), "image/jpeg");
   assert.equal(contentTypeFor("desconhecido.xyz"), null);
   assert.equal(contentTypeFor("sem-extensao"), null);
+});
+
+test("recognises an MP4 by its first box", () => {
+  const mp4 = new Uint8Array([0, 0, 0, 32, ...Buffer.from("ftypisom"), 0, 0, 2, 0]);
+  assert.equal(looksLikeMp4(mp4), true);
+  assert.equal(looksLikeMp4(new Uint8Array([0x89, ...Buffer.from("PNG\r\n\x1a\n"), 0, 0, 0, 13])), false);
+  assert.equal(looksLikeMp4(new Uint8Array([0, 0, 0, 32, ...Buffer.from("ftyp")])), false);
 });

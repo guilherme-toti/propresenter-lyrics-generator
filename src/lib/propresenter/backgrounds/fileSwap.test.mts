@@ -6,6 +6,7 @@ import os from "node:os";
 import path from "node:path";
 import {
   BackgroundsError,
+  createBeside,
   hasBackups,
   isSameFile,
   redoLatest,
@@ -412,4 +413,32 @@ test("runs tasks for the same file one at a time, even when one fails", async ()
     ["a-start", "a-end", "b"],
   );
   assert.ok(order.indexOf("other") < order.indexOf("a-end"), "a different file isn't held up");
+});
+
+test("copies a file beside itself under the first free name, never over another file", async () => {
+  const nameFor = (attempt: number) => (attempt === 1 ? "fundo - Início.png" : `fundo - Início (${attempt}).png`);
+  await fs.writeFile(path.join(dir, "Assets", "fundo - Início.png"), "someone else's");
+
+  assert.equal(await createBeside(path.join(dir, "Assets"), nameFor, { copyOf: targetPath }), "fundo - Início (2).png");
+  assert.equal(await fs.readFile(path.join(dir, "Assets", "fundo - Início (2).png"), "utf-8"), "original");
+  assert.equal(await fs.readFile(path.join(dir, "Assets", "fundo - Início.png"), "utf-8"), "someone else's");
+  assert.equal(await fs.readFile(targetPath, "utf-8"), "original");
+});
+
+test("a copy of a file that's gone fails without leaving anything behind", async () => {
+  await fs.rm(targetPath);
+  await assert.rejects(createBeside(path.join(dir, "Assets"), () => "fundo - Fim.png", { copyOf: targetPath }), {
+    code: "ENOENT",
+  });
+  assert.deepEqual(await fs.readdir(path.join(dir, "Assets")), []);
+});
+
+test("writes new bytes beside the original under a free name, never over another file", async () => {
+  const nameFor = (attempt: number) => (attempt === 1 ? "fundo - Início.mp4" : `fundo - Início (${attempt}).mp4`);
+  await fs.writeFile(path.join(dir, "Assets", "fundo - Início.mp4"), "someone else's");
+
+  const bytes = new TextEncoder().encode("video");
+  assert.equal(await createBeside(path.join(dir, "Assets"), nameFor, { bytes }), "fundo - Início (2).mp4");
+  assert.equal(await fs.readFile(path.join(dir, "Assets", "fundo - Início (2).mp4"), "utf-8"), "video");
+  assert.equal(await fs.readFile(path.join(dir, "Assets", "fundo - Início.mp4"), "utf-8"), "someone else's");
 });

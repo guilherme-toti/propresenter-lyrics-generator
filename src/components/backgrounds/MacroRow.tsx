@@ -1,13 +1,14 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { Card } from "@/components/ui/Card";
 import type { MacroMedia } from "@/lib/propresenter/backgrounds/slots";
-import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 import { MacroTestButton } from "./MacroTestButton";
-import { EmptyScreen, type ScreenRole } from "./ScreenFrame";
+import type { ScreenRole } from "@/lib/propresenter/backgrounds/requests";
+import { EmptyScreen } from "./ScreenFrame";
 
-interface MacroCardProps {
+interface MacroRowProps {
+  folder: string;
   macro: MacroMedia;
   port: number | null;
   onScreen: boolean;
@@ -15,8 +16,9 @@ interface MacroCardProps {
   renderFrame: (slotId: string, role: ScreenRole) => ReactNode;
 }
 
-/** One moment of the service: its main screen (the background) next to its side panels (the prop). */
-export function MacroCard({ macro, port, onScreen, onShown, renderFrame }: MacroCardProps) {
+/** One moment of the service, in ProPresenter's order: its central screen (the macro's media) next
+ * to its side panels (its prop). An item of the macros list, one per line. */
+export function MacroRow({ folder, macro, port, onScreen, onShown, renderFrame }: MacroRowProps) {
   const [testError, setTestError] = useState<string | null>(null);
   // Almost always one of each. A macro with more media actions gets one row per extra file.
   const rows = Math.max(macro.backgrounds.length, macro.props.length, 1);
@@ -28,7 +30,7 @@ export function MacroCard({ macro, port, onScreen, onShown, renderFrame }: Macro
   };
 
   return (
-    <Card className="flex flex-col gap-4 p-4">
+    <li className="flex flex-col gap-4 p-4">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex min-w-0 items-center gap-2 font-display text-lg font-semibold text-ink">
           {macro.macroColor && (
@@ -41,6 +43,7 @@ export function MacroCard({ macro, port, onScreen, onShown, renderFrame }: Macro
           <span className="truncate">{macro.macroName}</span>
         </h2>
         <MacroTestButton
+          folder={folder}
           macroUuid={macro.macroUuid}
           macroName={macro.macroName}
           port={port}
@@ -53,8 +56,9 @@ export function MacroCard({ macro, port, onScreen, onShown, renderFrame }: Macro
         />
       </div>
 
-      {/* 16fr/9fr makes the square and the 9:16 panel exactly the same height. */}
-      <div className="grid grid-cols-[16fr_9fr] items-start gap-3">
+      {/* 256fr/81fr is (16/9)/(9/16): the 16:9 screen and the 9:16 panel come out exactly the same
+          height. They fill the row; the macros pane's width is what sizes them. */}
+      <div className="grid grid-cols-[256fr_81fr] items-start gap-3">
         {Array.from({ length: rows }, (_, index) => (
           <div key={index} className="contents">
             {cell(macro.backgrounds, index, "background")}
@@ -63,7 +67,11 @@ export function MacroCard({ macro, port, onScreen, onShown, renderFrame }: Macro
         ))}
       </div>
 
-      {testError && <DismissibleAlert onDismiss={() => setTestError(null)}>{testError}</DismissibleAlert>}
-    </Card>
+      {testError && (
+        <InlineMessage tone="error" variant="boxed" onDismiss={() => setTestError(null)}>
+          {testError}
+        </InlineMessage>
+      )}
+    </li>
   );
 }

@@ -6,10 +6,10 @@ import { errorMessage } from "@/lib/postJson";
 import { ACCEPTED_IMAGE_EXTENSIONS, ACCEPTED_VIDEO_EXTENSIONS, planReplacement } from "@/lib/propresenter/backgrounds/media";
 import type { BackgroundsOverview, MediaSlot } from "@/lib/propresenter/backgrounds/slots";
 import type { TrayFile, TrayRefusal } from "@/lib/propresenter/backgrounds/tray";
-import { addTrayFiles, redoBackgroundSlot, replaceBackgroundSlot, undoBackgroundSlot } from "./api";
+import { addTrayFiles, redoBackgroundSlot, replaceBackgroundSlot, trayPreviewUrl, undoBackgroundSlot } from "./api";
 import { useBackgroundsDraft } from "./draftStore";
-import { useDesktopStore } from "@/lib/desktopStore";
-import { activeLinks, followersOf, historyGroup, type HistoryStep } from "./links";
+import { encodeStillVideo } from "./stillVideo";
+import { toBase64 } from "./stillVideoFrames";
 
 export interface SendProgress {
   done: number;
@@ -17,6 +17,7 @@ export interface SendProgress {
 }
 
 /** An undo or redo running on a screen. */
+export type HistoryStep = "undoing" | "redoing";
 
 export interface SendSummary {
   sent: number;
@@ -33,10 +34,9 @@ const ALL_MEDIA_FILTER = {
   extensions: [...ACCEPTED_IMAGE_EXTENSIONS, ...ACCEPTED_VIDEO_EXTENSIONS],
 };
 
+/** A video screen takes images too: they become still videos on the way out. */
 function pickerFilterFor(slot: MediaSlot) {
-  return slot.mediaType === "video"
-    ? { name: "Vídeo MP4", extensions: [...ACCEPTED_VIDEO_EXTENSIONS] }
-    : { name: "Imagem", extensions: [...ACCEPTED_IMAGE_EXTENSIONS] };
+  return slot.mediaType === "video" ? ALL_MEDIA_FILTER : { name: "Imagem", extensions: [...ACCEPTED_IMAGE_EXTENSIONS] };
 }
 
 interface OverviewHandle {
@@ -80,27 +80,21 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
     return files.flatMap((file) => tray.find((item) => item.sourcePath === file.sourcePath) ?? []);
   };
 
-  /** Stages the tray file on the slot and on the screens that follow it. Returns false, with the reason on the
-   * screen, when the file can't go there. */
+  /** Stages the tray file on the slot. Returns false, with the reason on the screen, when the file
+   * can't go there. */
   const stageOn = (slotId: string, trayFileId: string): boolean => {
     const slot = slotById(slotId);
     // Read fresh: a file added a moment ago (picked for this screen) isn't in this render's draft.
     const item = useBackgroundsDraft.getState().tray.find((candidate) => candidate.id === trayFileId);
-    if (!slot || !item || !overview) return false;
+    if (!slot || !item) return false;
 
     const plan = planReplacement(slot, item.fileName);
     if (plan.action === "refuse") {
       draft.setNotice(slotId, { tone: "error", message: plan.message });
       return false;
     }
-    // A follower that can't take the file (a different format) just keeps its own.
-    const links = activeLinks(useDesktopStore.getState().backgroundLinks, overview.slots);
-    const followers = followersOf(slotId, links).filter((followerId) => {
-      const follower = slotById(followerId);
-      return follower !== null && planReplacement(follower, item.fileName).action !== "refuse";
-    });
     setSummary(null);
-    draft.stage([slotId, ...followers], trayFileId);
+    draft.stage(slotId, trayFileId);
     return true;
   };
 
@@ -116,7 +110,7 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
     const picked = await open({
       multiple: false,
       directory: false,
-      title: slot.mediaType === "video" ? "Escolha o novo vídeo" : "Escolha a nova imagem",
+      title: slot.mediaType === "video" ? "Escolha o novo vídeo ou imagem" : "Escolha a nova imagem",
       filters: [pickerFilterFor(slot)],
     });
     if (typeof picked !== "string") return;
@@ -141,12 +135,8 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
    */
   const send = async () => {
     if (!folder || progress) return;
-    const stagedAtStart = useBackgroundsDraft.getState().staged;
-    const slotIds = Object.keys(stagedAtStart).filter((slotId) => slotById(slotId));
+    const slotIds = Object.keys(useBackgroundsDraft.getState().staged).filter((slotId) => slotById(slotId));
     if (slotIds.length === 0) return;
-    // Read before anything goes out: sending a slot unties the followers staged along with it.
-    const leaderOf = new Map(slotIds.map((slotId) => [slotId, stagedAtStart[slotId].followsSlotId ?? slotId]));
-    const sentByLeader = new Map<string, string[]>();
 
     let sent = 0;
     const failures: string[] = [];
@@ -156,12 +146,16 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
       const { staged, tray } = useBackgroundsDraft.getState();
       const change = staged[slotId];
       const item = change && tray.find((candidate) => candidate.id === change.trayFileId);
-      if (item) {
+      const slot = slotById(slotId);
+      if (item && slot) {
         try {
-          updateSlot(await replaceBackgroundSlot({ folder, slotId, sourcePath: item.sourcePath }));
+          // An image onto a video screen becomes a still video here first: the server can't encode.
+          const video =
+            planReplacement(slot, item.fileName).action === "encode-video"
+              ? toBase64(await encodeStillVideo(trayPreviewUrl(item.id)))
+              : undefined;
+          updateSlot(await replaceBackgroundSlot({ folder, slotId, sourcePath: item.sourcePath, video }));
           draft.markSent(slotId, item.id);
-          const leader = leaderOf.get(slotId) ?? slotId;
-          sentByLeader.set(leader, [...(sentByLeader.get(leader) ?? []), slotId]);
           sent += 1;
         } catch (err) {
           const message = errorMessage(err);
@@ -171,7 +165,6 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
       }
       setProgress({ done: index + 1, total: slotIds.length });
     }
-    for (const group of sentByLeader.values()) draft.rememberSentTogether(group);
     setProgress(null);
     setSummary({ sent, failures });
     reload();
@@ -186,35 +179,24 @@ export function useDraftActions(folder: string | null, { overview, reload, updat
    * too: a quick double-click lands before the re-render that would disable the button. */
   const stepping = useRef(new Set<string>());
   const stepHistory = async (slotId: string, step: HistoryStep) => {
-    if (!folder || !overview) return;
-    const { sentTogether, undoneTogether } = useBackgroundsDraft.getState();
-    const slotIds = historyGroup(slotId, step, overview.slots, { sent: sentTogether, undone: undoneTogether });
-    if (slotIds.some((id) => stepping.current.has(id))) return;
-    for (const id of slotIds) stepping.current.add(id);
-    if (step === "undoing") draft.rememberUndoneTogether(slotIds);
+    if (!folder || stepping.current.has(slotId)) return;
+    stepping.current.add(slotId);
     // Whatever the bar said about the last send no longer holds once a screen goes back or forward.
     setSummary(null);
-    setHistorySteps((prev) => {
-      const next = new Map(prev);
-      for (const id of slotIds) next.set(id, step);
-      return next;
-    });
-    // One at a time, like a send, so a failure is shown on the screen it happened to.
-    for (const id of slotIds) {
-      try {
-        const request = { folder, slotId: id };
-        updateSlot(await (step === "undoing" ? undoBackgroundSlot(request) : redoBackgroundSlot(request)));
-        draft.setNotice(id, null);
-      } catch (err) {
-        draft.setNotice(id, { tone: "error", message: errorMessage(err) });
-      } finally {
-        stepping.current.delete(id);
-        setHistorySteps((prev) => {
-          const next = new Map(prev);
-          next.delete(id);
-          return next;
-        });
-      }
+    setHistorySteps((prev) => new Map(prev).set(slotId, step));
+    try {
+      const request = { folder, slotId };
+      updateSlot(await (step === "undoing" ? undoBackgroundSlot(request) : redoBackgroundSlot(request)));
+      draft.setNotice(slotId, null);
+    } catch (err) {
+      draft.setNotice(slotId, { tone: "error", message: errorMessage(err) });
+    } finally {
+      stepping.current.delete(slotId);
+      setHistorySteps((prev) => {
+        const next = new Map(prev);
+        next.delete(slotId);
+        return next;
+      });
     }
     reload();
   };

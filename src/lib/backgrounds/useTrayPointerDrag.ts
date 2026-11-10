@@ -1,26 +1,17 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent, type RefObject } from "react";
 import { slotIdAtPoint } from "./dropTargets";
 
 /** How far the pointer moves before a press becomes a drag, so a slightly shaky click still
  * selects the file. */
 const DRAG_THRESHOLD_PX = 5;
-/** Holding a dragged file this close to the top or bottom of the scrolling area scrolls it, so
- * macros below the fold can be reached without the wheel. */
+/** Holding a dragged file this close to the top or bottom of the screens' scrolling area scrolls
+ * it, so macros below the fold can be reached without the wheel. */
 const AUTO_SCROLL_EDGE_PX = 64;
 /** Per frame, reached only at the very edge: speed grows with the square of how deep the pointer
  * is, so it creeps near the start of the zone and a screen can still be stopped on. */
 const AUTO_SCROLL_MAX_STEP_PX = 12;
-
-/** The nearest ancestor that scrolls vertically (in this app, the shell's <main>). */
-function scrollParentOf(element: HTMLElement): HTMLElement {
-  for (let node = element.parentElement; node; node = node.parentElement) {
-    const { overflowY } = getComputedStyle(node);
-    if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) return node;
-  }
-  return document.scrollingElement instanceof HTMLElement ? document.scrollingElement : document.documentElement;
-}
 
 export interface TrayDragState {
   trayFileId: string;
@@ -38,7 +29,6 @@ interface Pressed {
   x: number;
   y: number;
   dragging: boolean;
-  scroller: HTMLElement;
 }
 
 /**
@@ -46,7 +36,11 @@ interface Pressed {
  * on Windows, Tauri's own file-drop handler turns HTML5 drag and drop inside the window off, and
  * that handler is what brings files in from Explorer.
  */
-export function useTrayPointerDrag(onDrop: (trayFileId: string, slotId: string) => void) {
+export function useTrayPointerDrag(
+  onDrop: (trayFileId: string, slotId: string) => void,
+  /** What scrolls the screens. Named rather than looked up from the tray, which scrolls on its own. */
+  screensScroller: RefObject<HTMLElement | null>,
+) {
   const [drag, setDrag] = useState<TrayDragState | null>(null);
   const pressed = useRef<Pressed | null>(null);
   // The click that follows the pointerup of a drag must not also select the file.
@@ -71,8 +65,9 @@ export function useTrayPointerDrag(onDrop: (trayFileId: string, slotId: string) 
     // A frame loop rather than pointermove, since a pointer held still at the edge sends none.
     let frame = requestAnimationFrame(function step() {
       const press = pressed.current;
-      if (press?.dragging) {
-        const area = press.scroller.getBoundingClientRect();
+      const scroller = screensScroller.current;
+      if (press?.dragging && scroller) {
+        const area = scroller.getBoundingClientRect();
         const top = Math.max(area.top, 0);
         const bottom = Math.min(area.bottom, window.innerHeight);
         const depth =
@@ -82,11 +77,11 @@ export function useTrayPointerDrag(onDrop: (trayFileId: string, slotId: string) 
               ? press.y - (bottom - AUTO_SCROLL_EDGE_PX)
               : 0;
         if (depth !== 0) {
-          const before = press.scroller.scrollTop;
+          const before = scroller.scrollTop;
           const reach = Math.min(Math.abs(depth) / AUTO_SCROLL_EDGE_PX, 1);
-          press.scroller.scrollTop += Math.sign(depth) * Math.max(1, AUTO_SCROLL_MAX_STEP_PX * reach * reach);
+          scroller.scrollTop += Math.sign(depth) * Math.max(1, AUTO_SCROLL_MAX_STEP_PX * reach * reach);
           // The page moved under a still pointer, so a different screen may be under it now.
-          if (press.scroller.scrollTop !== before) {
+          if (scroller.scrollTop !== before) {
             const overSlotId = slotIdAtPoint(press.x, press.y);
             setDrag((prev) => (prev && prev.overSlotId !== overSlotId ? { ...prev, overSlotId } : prev));
           }
@@ -99,7 +94,7 @@ export function useTrayPointerDrag(onDrop: (trayFileId: string, slotId: string) 
       window.removeEventListener("keydown", onKeyDown);
       cancelAnimationFrame(frame);
     };
-  }, [dragging]);
+  }, [dragging, screensScroller]);
 
   const handlersFor = (trayFileId: string) => ({
     onPointerDown: (event: PointerEvent<HTMLElement>) => {
@@ -113,7 +108,6 @@ export function useTrayPointerDrag(onDrop: (trayFileId: string, slotId: string) 
         x: event.clientX,
         y: event.clientY,
         dragging: false,
-        scroller: scrollParentOf(event.currentTarget),
       };
       // Keeps the moves coming while the pointer is over other elements, or outside the window.
       event.currentTarget.setPointerCapture(event.pointerId);

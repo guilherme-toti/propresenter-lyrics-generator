@@ -50,7 +50,7 @@ function macroMediaCache(): MacroMediaCache {
  * macros as they are on disk now, not as a client was told earlier: ProPresenter rewrites these
  * documents whenever a macro or prop is edited. Decoding is skipped while neither has changed.
  */
-async function readMacroMedia(folder: string): Promise<MacroMediaMap> {
+export async function readMacroMedia(folder: string): Promise<MacroMediaMap> {
   const [macrosStamp, propsStamp] = await Promise.all([
     documentStamp(macrosFilePath(folder)),
     documentStamp(propsFilePath(folder)),

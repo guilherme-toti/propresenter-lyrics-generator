@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { CheckCircle2, Loader2, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import type { SendProgress, SendSummary } from "@/lib/backgrounds/useDraftActions";
-import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
+import { InlineMessage } from "@/components/ui/InlineMessage";
 
 interface SendBarProps {
   stagedCount: number;
@@ -17,7 +17,7 @@ interface SendBarProps {
 
 function FailureAlert({ failures, onDismiss }: { failures: string[]; onDismiss: () => void }) {
   return (
-    <DismissibleAlert variant="inline" onDismiss={onDismiss}>
+    <InlineMessage tone="error" onDismiss={onDismiss}>
       <p className="font-medium">
         {failures.length === 1 ? "Uma troca não deu." : `${failures.length} trocas não deram.`}
       </p>
@@ -26,13 +26,13 @@ function FailureAlert({ failures, onDismiss }: { failures: string[]; onDismiss: 
           <li key={reason}>{reason}</li>
         ))}
       </ul>
-    </DismissibleAlert>
+    </InlineMessage>
   );
 }
 
 /**
  * The screen's one decision, kept in reach however far down the macros go. Sticky rather than
- * fixed: scrolled to the bottom, it sits after the last card instead of over it.
+ * fixed: scrolled to the bottom, it sits after the last macro instead of over it.
  */
 export function SendBar({ stagedCount, progress, summary, onSend, onDiscard, onDismissSummary }: SendBarProps) {
   const failures = summary?.failures ?? [];
@@ -47,23 +47,21 @@ export function SendBar({ stagedCount, progress, summary, onSend, onDiscard, onD
     );
   } else if (stagedCount > 0) {
     content = (
-      // Narrow windows: count and "Descartar" on one row, "Enviar" full width under them.
-      <div className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-3 sm:grid-cols-[1fr_auto_auto]">
+      // A narrow bar: count and "Descartar" on one row, "Enviar" full width under them. Sized by the
+      // bar's own width (a container query), since the macros pane doesn't follow the window's.
+      <div className="grid grid-cols-[1fr_auto] items-center gap-x-2 gap-y-3 @xl:grid-cols-[1fr_auto_auto]">
         {failures.length > 0 && (
           <div className="col-span-full">
             <FailureAlert failures={failures} onDismiss={onDismissSummary} />
           </div>
         )}
-        <div className="min-w-0">
-          <p className="text-base font-medium text-ink">
-            {stagedCount} {stagedCount === 1 ? "troca pronta" : "trocas prontas"}
-          </p>
-          <p className="hidden text-sm text-ink/60 sm:block">O ProPresenter só muda quando você enviar.</p>
-        </div>
+        <p className="min-w-0 text-base font-medium text-ink">
+          {stagedCount} {stagedCount === 1 ? "troca pronta" : "trocas prontas"}
+        </p>
         <Button variant="ghost" onClick={onDiscard}>
           Descartar
         </Button>
-        <Button onClick={onSend} className="col-span-2 sm:col-span-1">
+        <Button onClick={onSend} className="col-span-2 @xl:col-span-1">
           <Send size={16} aria-hidden />
           Enviar para o ProPresenter
         </Button>
@@ -73,7 +71,7 @@ export function SendBar({ stagedCount, progress, summary, onSend, onDiscard, onD
     content = <FailureAlert failures={failures} onDismiss={onDismissSummary} />;
   } else {
     content = (
-      <div className="flex items-start gap-2 sm:items-center">
+      <div className="flex items-start gap-2 @xl:items-center">
         <p className="flex flex-1 items-start gap-2 text-base text-ink" role="status">
           <CheckCircle2 size={18} aria-hidden className="mt-1 shrink-0" />
           Pronto! Na próxima vez que a macro rodar, já aparece o novo.
@@ -94,7 +92,7 @@ export function SendBar({ stagedCount, progress, summary, onSend, onDiscard, onD
     <div
       role="region"
       aria-label="Enviar trocas"
-      className="sticky bottom-4 z-20 rounded-2xl border border-line bg-white px-4 py-3 shadow-lg"
+      className="@container sticky bottom-4 z-20 rounded-2xl border border-line bg-white px-4 py-3 shadow-lg"
     >
       {content}
     </div>

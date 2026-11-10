@@ -1,17 +1,26 @@
 import { NextResponse } from "next/server";
-import { ProPresenterError, triggerMacro } from "@/lib/propresenter/api";
+import { clearMacroLayers, ProPresenterError, triggerMacro } from "@/lib/propresenter/api";
+import { waitForVideoLengths } from "@/lib/propresenter/backgrounds/lengthSync";
 import { triggerMacroRequestSchema } from "@/lib/propresenter/backgrounds/requests";
 import { invalidRequestResponse } from "@/lib/propresenter/backgrounds/routeError";
 
 /** Runs a macro on ProPresenter so the user can see a swapped file live. An unreachable
- * ProPresenter is a result to show (200 with `ok: false`), as in /api/propresenter/ping. */
+ * ProPresenter is a result to show (200 with `ok: false`), as in /api/propresenter/ping.
+ *
+ * Shows the files as they are now, which takes two things (both checked on ProPresenter 21.4):
+ * - waiting until ProPresenter has re-read a just-swapped video's length (see lengthSync.ts);
+ * - clearing the macro layers first, since ProPresenter reopens a macro's file only when it isn't
+ *   on screen already. */
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const parsed = triggerMacroRequestSchema.safeParse(body);
   if (!parsed.success) return invalidRequestResponse();
 
   try {
-    await triggerMacro(parsed.data.port, parsed.data.macroUuid);
+    const { port, folder, macroUuid } = parsed.data;
+    await waitForVideoLengths(folder, macroUuid);
+    await clearMacroLayers(port);
+    await triggerMacro(port, macroUuid);
     return NextResponse.json({ ok: true });
   } catch (err) {
     console.error("backgrounds/trigger failed", err);

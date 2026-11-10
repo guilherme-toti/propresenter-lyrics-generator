@@ -7,6 +7,7 @@ import { triggerMacro } from "@/lib/backgrounds/api";
 import { errorMessage } from "@/lib/postJson";
 
 interface MacroTestButtonProps {
+  folder: string;
   macroUuid: string;
   macroName: string;
   /** Null until the ProPresenter port is set in Ajustes; nothing can run without it. */
@@ -18,14 +19,14 @@ interface MacroTestButtonProps {
 }
 
 /** Runs the macro on ProPresenter, so a sent change can be checked on the real output. */
-export function MacroTestButton({ macroUuid, macroName, port, onScreen, onShown, onError }: MacroTestButtonProps) {
+export function MacroTestButton({ folder, macroUuid, macroName, port, onScreen, onShown, onError }: MacroTestButtonProps) {
   const [running, setRunning] = useState(false);
 
   const run = async () => {
     if (!port) return;
     setRunning(true);
     try {
-      await triggerMacro({ port, macroUuid });
+      await triggerMacro({ port, folder, macroUuid });
       onShown(macroUuid);
     } catch (err) {
       onError(errorMessage(err));

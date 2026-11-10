@@ -11,7 +11,7 @@ import {
   type SwapTarget,
 } from "./fileSwap";
 import { describeSlot, requireSlotRef, slotBackupDir, slotRedoDir } from "./library";
-import { planReplacement, type ImageFormat } from "./media";
+import { looksLikeMp4, planReplacement, type ImageFormat } from "./media";
 import type { MediaSlot, MediaSlotRef } from "./slots";
 
 /**
@@ -44,7 +44,25 @@ function swapTargetOf(slot: MediaSlotRef): SwapTarget {
   return { targetPath: slot.filePath, backupDir: slotBackupDir(slot.id), redoDir: slotRedoDir(slot.id) };
 }
 
-export async function replaceSlotFile(folder: string, slotId: string, sourcePath: string): Promise<MediaSlot> {
+/** The bytes an "encode-video" plan writes: the still video the app's window made. Anything else is
+ * a client bug, not something the user can fix, so it gets the plain message. */
+function stillVideoFor(video: Buffer | undefined): Buffer {
+  if (!video || !looksLikeMp4(video)) {
+    throw new BackgroundsError("Não deu pra transformar essa imagem em vídeo. Tente enviar de novo.", 400);
+  }
+  return video;
+}
+
+/**
+ * `video` is the source image already turned into a still video, for a video slot (the plan says
+ * when). The image itself is still named, so the plan and the "is it still there" checks hold.
+ */
+export async function replaceSlotFile(
+  folder: string,
+  slotId: string,
+  sourcePath: string,
+  video?: Buffer,
+): Promise<MediaSlot> {
   return withFileLock(slotId, async () => {
     const slot = await requireSlotRef(folder, slotId);
 
@@ -60,8 +78,16 @@ export async function replaceSlotFile(folder: string, slotId: string, sourcePath
     const plan = planReplacement(slot, path.basename(source));
     if (plan.action === "refuse") throw new BackgroundsError(plan.message);
 
+    if (video && plan.action !== "encode-video") {
+      throw new BackgroundsError("Esse arquivo não precisa virar vídeo. Tente enviar de novo.", 400);
+    }
     // Converting before anything is backed up or written means an unreadable image changes nothing.
-    const converted = plan.action === "convert" ? await convertImage(source, plan.format) : null;
+    const converted =
+      plan.action === "convert"
+        ? await convertImage(source, plan.format)
+        : plan.action === "encode-video"
+          ? stillVideoFor(video)
+          : null;
     await replaceFile({
       ...swapTargetOf(slot),
       sourcePath: source,

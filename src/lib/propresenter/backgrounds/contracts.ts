@@ -75,6 +75,21 @@ export const addTrayFilesReplySchema = z.object({
 });
 export type AddTrayFilesReply = z.infer<typeof addTrayFilesReplySchema>;
 
+/** The app that opened with a file selected, so the steps can name it. Null when none did. */
+const fileManagerSchema = z.enum(["finder", "explorer"]).nullable();
+export type FileManager = NonNullable<z.infer<typeof fileManagerSchema>>;
+
+/** The copy "Separar" made for one macro's screen, and what's needed to point that screen at it. */
+export const separateSlotReplySchema = z.object({
+  /** The copy's name, in the same folder as the shared file. */
+  fileName: z.string(),
+  revealedIn: fileManagerSchema,
+  /** For a prop's screen: the prop to edit, and the other macros showing that very prop. While
+   * any do, the macro needs a prop of its own, not just a file of its own. */
+  prop: z.object({ name: z.string(), sharedWith: z.array(z.string()) }).nullable(),
+});
+export type SeparateSlotReply = z.infer<typeof separateSlotReplySchema>;
+
 /** The workspace ProPresenter lists as its own, or null when none was found. */
 export const detectedFolderReplySchema = z.object({ folder: z.string().nullable() });
 export type DetectedFolderReply = z.infer<typeof detectedFolderReplySchema>;
