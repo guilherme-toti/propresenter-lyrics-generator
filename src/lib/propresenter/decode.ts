@@ -8,6 +8,10 @@ export interface DecodedProFile {
    * concatenated in element order — matches what one ProPresenter cue shows
    * on one slide. Cues with no text elements at all are omitted. */
   cueLines: string[][];
+  /** The file's CCLI author and artist, "" when unset. This app's export writes the song's artist
+   * as the author (see build.ts); ProPresenter's CCLI panel fills both. */
+  author: string;
+  artistCredits: string;
 }
 
 /**
@@ -23,6 +27,10 @@ export interface DecodedProFile {
  */
 interface DecodedPresentation {
   name?: string;
+  ccli?: {
+    author?: string;
+    artistCredits?: string;
+  };
   cues?: {
     actions?: {
       slide?: {
@@ -62,5 +70,10 @@ export async function decodeProFile(buffer: Buffer): Promise<DecodedProFile> {
 
   const title = obj.name?.trim() ? obj.name.trim() : "Música importada";
 
-  return { title, cueLines };
+  return {
+    title,
+    cueLines,
+    author: obj.ccli?.author?.trim() ?? "",
+    artistCredits: obj.ccli?.artistCredits?.trim() ?? "",
+  };
 }
