@@ -13,7 +13,7 @@ import {
 afterEach(() => mock.restoreAll());
 
 const UNREACHABLE =
-  "Não foi possível falar com o ProPresenter. Verifique se ele está aberto e se a rede está ativada nas preferências.";
+  "O ProPresenter não respondeu. Confira se ele está aberto, com a rede ativada, e se a porta em Ajustes é a mesma das preferências de rede dele.";
 
 test("keeps the reason a playlist list came back empty, so a closed ProPresenter isn't read as no playlists", async () => {
   const playlists = [{ id: "9F1C", name: "Culto de Domingo" }];

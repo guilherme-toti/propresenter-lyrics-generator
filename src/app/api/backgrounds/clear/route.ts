@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clearMacroLayers } from "@/lib/propresenter/api";
+import { clearMacroLayers, proPresenterFailureMessage } from "@/lib/propresenter/api";
 import { clearScreenRequestSchema } from "@/lib/propresenter/backgrounds/requests";
 import { invalidRequestResponse } from "@/lib/propresenter/backgrounds/routeError";
 
@@ -14,10 +14,9 @@ export async function POST(request: Request) {
     await clearMacroLayers(parsed.data.port);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("backgrounds/clear failed", err);
     return NextResponse.json({
       ok: false,
-      error: "O ProPresenter não limpou a tela. Confira se ele está aberto e com a rede ativada nas preferências.",
+      error: proPresenterFailureMessage(err, "backgrounds/clear", "O ProPresenter não limpou a tela. Tente de novo."),
     });
   }
 }

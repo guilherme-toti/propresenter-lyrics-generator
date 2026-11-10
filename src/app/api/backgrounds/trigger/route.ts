@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { clearMacroLayers, ProPresenterError, triggerMacro } from "@/lib/propresenter/api";
+import { clearMacroLayers, ProPresenterError, proPresenterFailureMessage, triggerMacro } from "@/lib/propresenter/api";
 import { waitForVideoLengths } from "@/lib/propresenter/backgrounds/lengthSync";
 import { triggerMacroRequestSchema } from "@/lib/propresenter/backgrounds/requests";
 import { invalidRequestResponse } from "@/lib/propresenter/backgrounds/routeError";
@@ -23,15 +23,15 @@ export async function POST(request: Request) {
     await triggerMacro(port, macroUuid);
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("backgrounds/trigger failed", err);
     // The macro list comes from ProPresenter's file on disk, so a 404 means the screen is showing a
-    // macro deleted since; "Atualizar" re-reads that file.
+    // macro deleted since; "Atualizar" re-reads that file. Anything else keeps the client's message,
+    // which says when ProPresenter didn't answer at all (closed, or the port in Ajustes changed).
     const macroGone = err instanceof ProPresenterError && err.status === 404;
     return NextResponse.json({
       ok: false,
       error: macroGone
         ? "Essa macro não está mais no ProPresenter. Talvez tenha sido apagada; clique em “Atualizar” para ver as macros de agora."
-        : "O ProPresenter não rodou a macro. Confira se ele está aberto e com a rede ativada nas preferências.",
+        : proPresenterFailureMessage(err, "backgrounds/trigger", "O ProPresenter não rodou a macro. Tente de novo."),
     });
   }
 }

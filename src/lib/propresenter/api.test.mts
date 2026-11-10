@@ -287,7 +287,9 @@ describe("when ProPresenter fails a request", () => {
 
     const err = await failureOf(() => pingProPresenter(port));
 
-    assert.match(err.message, /^Não foi possível falar com o ProPresenter\./);
+    // A stale port fails exactly like a closed ProPresenter, so the message points at both.
+    assert.match(err.message, /^O ProPresenter não respondeu\./);
+    assert.match(err.message, /porta em Ajustes/);
     assert.equal(err.status, undefined);
   });
 

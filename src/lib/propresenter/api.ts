@@ -159,9 +159,10 @@ async function apiRequest(port: number, path: string, init?: RequestInit): Promi
     });
   } catch (err) {
     // Closed and slow look the same on screen; the log tells them apart (ECONNREFUSED vs a timeout).
+    // A port that changed is as likely as a closed ProPresenter, so the message names both.
     console.error(`ProPresenter didn't answer ${init?.method ?? "GET"} ${path}:`, err);
     throw new ProPresenterError(
-      "Não foi possível falar com o ProPresenter. Verifique se ele está aberto e se a rede está ativada nas preferências.",
+      "O ProPresenter não respondeu. Confira se ele está aberto, com a rede ativada, e se a porta em Ajustes é a mesma das preferências de rede dele.",
     );
   }
   if (!res.ok) {
