@@ -11,13 +11,16 @@ const PT_STOPWORDS = new Set([
   "do", "das", "dos", "em", "na", "no", "nas", "nos", "é", "era", "será", "como", "mais",
   "muito", "tudo", "nada", "aqui", "ali", "lá", "sim", "porque", "quando", "onde",
   "vou", "vem", "vamos", "seja", "quero", "posso", "temos", "tenho", "só", "já",
+  "te", "tu", "teus", "tuas", "meus", "minhas", "por", "pra",
 ]);
 
+// No "me": it's as common in Português ("Tu me chamas", "Me guia") as in English, so it tagged
+// those lines English.
 const EN_STOPWORDS = new Set([
   "the", "and", "of", "to", "is", "you", "your", "are", "my", "his", "her", "our", "we",
   "he", "she", "they", "in", "on", "at", "for", "with", "this", "that", "was", "will",
   "be", "have", "has", "do", "does", "not", "all", "everything", "nothing", "here",
-  "there", "yes", "no", "because", "when", "where", "more", "very", "am", "us", "me",
+  "there", "yes", "no", "because", "when", "where", "more", "very", "am", "us",
 ]);
 
 function tokenize(text: string): string[] {
