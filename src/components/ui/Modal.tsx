@@ -45,21 +45,26 @@ export function Modal({ open, onClose, title, className, children }: ModalProps)
         aria-modal="true"
         aria-label={title}
         className={cn(
-          "w-full max-w-2xl rounded-2xl border border-line bg-cream-50 p-6 shadow-2xl max-h-[85vh] overflow-y-auto",
+          "flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-2xl border border-line bg-cream-50 shadow-2xl",
           className,
         )}
       >
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
-          <button
-            onClick={onClose}
-            aria-label="Fechar"
-            className="rounded-full p-1.5 text-ink/50 transition-colors hover:bg-ink/5 hover:text-ink"
-          >
-            <X size={18} />
-          </button>
+        {/* The scrollbar belongs to this inner box so the frame's rounded clip trims it: a box that
+         * scrolls itself draws its scrollbar square over its own rounded corners. Sticky footers in
+         * the content (DriveBrowser) rely on this box being the scroller and owning the p-6. */}
+        <div className="min-h-0 overflow-y-auto p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="font-display text-xl font-semibold text-ink">{title}</h2>
+            <button
+              onClick={onClose}
+              aria-label="Fechar"
+              className="rounded-full p-1.5 text-ink/50 transition-colors hover:bg-ink/5 hover:text-ink"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {children}
         </div>
-        {children}
       </div>
     </div>
   );
