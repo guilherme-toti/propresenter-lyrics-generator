@@ -18,14 +18,14 @@ interface NewSongDialogProps {
 
 export function NewSongDialog({ open, onClose }: NewSongDialogProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Nova música">
+    <Modal open={open} onClose={onClose} title="Procurar música">
       <NewSongOptions onClose={onClose} />
     </Modal>
   );
 }
 
 /** Mounted only while the dialog is open, so a search or a failed library open never carries over
- * into the next "Nova música". */
+ * into the next "Procurar música". */
 function NewSongOptions({ onClose }: { onClose: () => void }) {
   const startSong = useLibraryStore((s) => s.startSong);
   const { generate } = useGenerateSong();

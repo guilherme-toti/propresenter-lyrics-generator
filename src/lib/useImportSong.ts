@@ -12,17 +12,9 @@ import type { Song } from "@/lib/types";
 
 export type { ImportableFile };
 
-/** Mirrors useGenerateSong.ts's shape — list()/search()/importFile() instead of search()/generate(),
+/** Mirrors useGenerateSong.ts's shape — search()/importFile() instead of search()/generate(),
  * same {error} convention on failure. */
 export function useImportSong() {
-  const list = async (libraryFolder: string): Promise<{ files: ImportableFile[] } | { error: string }> => {
-    try {
-      return await postJsonAs("/api/songs/import-list", { libraryFolder }, importableFilesReplySchema);
-    } catch (err) {
-      return { error: errorMessage(err) };
-    }
-  };
-
   const search = async (
     libraryFolder: string,
     query: string,
@@ -43,13 +35,13 @@ export function useImportSong() {
     }
   };
 
-  return { list, search, importFile };
+  return { search, importFile };
 }
 
 /**
- * Opens a picked library file as the active song — shared by "Importar do ProPresenter" and the
- * library half of "Nova música"'s search, so both lock the list and report failures the same way
- * while the file decodes. `onOpened` runs once the song is in the studio (typically: close).
+ * Opens a file picked from the library half of "Procurar música"'s search as the active song,
+ * locking the list and reporting failures while the file decodes. `onOpened` runs once the song is
+ * in the studio (typically: close).
  */
 export function useOpenLibraryFile(onOpened: () => void) {
   const startSong = useLibraryStore((s) => s.startSong);

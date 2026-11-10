@@ -15,7 +15,7 @@ export function StudioView() {
   const startSong = useLibraryStore((s) => s.startSong);
 
   // Escape hatch from a failed generation: start the blank song the user would otherwise
-  // have to go back and ask for through "Nova música" → "Criar manualmente".
+  // have to go back and ask for through "Procurar música" → "Criar manualmente".
   const createManuallyFromFailure = () => {
     startSong({ mode: "manual" });
     dismissGeneration();

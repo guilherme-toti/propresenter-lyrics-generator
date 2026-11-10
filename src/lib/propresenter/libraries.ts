@@ -39,7 +39,7 @@ export function fileNamesMatch(a: string, b: string): boolean {
  * Enumerates every ProPresenter Library folder — the configured one (see Settings' "Pasta da
  * Library") plus every sibling folder next to it, since ProPresenter itself keeps all of a user's
  * libraries as sibling folders under one shared "Libraries" parent, and this app only ever asks
- * for one of them. Shared by the "Importar do ProPresenter" file list and the export
+ * for one of them. Shared by "Procurar música"'s library search and the export
  * conflict-check flow (see ExportOverwriteModal), both of which need to look across every
  * library, not just the configured one.
  *

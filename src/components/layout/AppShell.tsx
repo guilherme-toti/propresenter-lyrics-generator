@@ -4,8 +4,6 @@ import { createContext, useContext, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { Header } from "@/components/layout/Header";
 import { NewSongDialog } from "@/components/studio/NewSongDialog";
-import { SettingsDialog } from "@/components/settings/SettingsDialog";
-import { ImportSongDialog } from "@/components/studio/ImportSongDialog";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
@@ -18,6 +16,7 @@ import { useValidateActivePlaylist } from "@/lib/desktop/useValidateActivePlayli
 
 const SONGS_PATH = "/";
 const BACKGROUNDS_PATH = "/backgrounds";
+const SETTINGS_PATH = "/settings";
 
 interface AppShellActions {
   openNewSong: () => void;
@@ -26,7 +25,8 @@ interface AppShellActions {
 
 const AppShellContext = createContext<AppShellActions | null>(null);
 
-/** The shell's dialogs, for screens that need to open one (an empty state's "Abrir Ajustes"). */
+/** What the shell opens — the search dialog, the Ajustes screen — for screens that lead there (an
+ * empty state's "Abrir Ajustes"). */
 export function useAppShellActions(): AppShellActions {
   const actions = useContext(AppShellContext);
   if (!actions) throw new Error("useAppShellActions must be used inside AppShell.");
@@ -42,8 +42,6 @@ export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [importOpen, setImportOpen] = useState(false);
   const { discovered, confirm } = usePlaylistWatcher();
   const { missing: missingPlaylist, dismiss: dismissMissingPlaylist } = useValidateActivePlaylist();
   const proApiPort = useDesktopStore((s) => s.proApiPort);
@@ -52,18 +50,11 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   const onSongsScreen = pathname === SONGS_PATH;
 
-  // A new or imported song opens on the songs screen, so starting one from another screen goes
-  // there first; the dialog opens over it.
-  const showSongsScreen = () => {
-    if (!onSongsScreen) router.push(SONGS_PATH);
-  };
+  // A picked or new song opens on the songs screen, so searching from another screen goes there
+  // first; the dialog opens over it.
   const openNewSongDialog = () => {
-    showSongsScreen();
+    if (!onSongsScreen) router.push(SONGS_PATH);
     setDialogOpen(true);
-  };
-  const openImportDialog = () => {
-    showSongsScreen();
-    setImportOpen(true);
   };
 
   // On the songs screen Home clears the current song (see goHome). From any other screen it only
@@ -73,12 +64,12 @@ export function AppShell({ children }: { children: ReactNode }) {
     else router.push(SONGS_PATH);
   };
 
-  const actions: AppShellActions = { openNewSong: openNewSongDialog, openSettings: () => setSettingsOpen(true) };
+  const actions: AppShellActions = { openNewSong: openNewSongDialog, openSettings: () => router.push(SETTINGS_PATH) };
 
   if (!mounted) {
     return (
       <div className="flex h-screen flex-col overflow-hidden">
-        <Header onNewSong={openNewSongDialog} onGoHome={handleHome} />
+        <Header onNewSong={openNewSongDialog} onGoHome={handleHome} homeActive={onSongsScreen} />
         <div className="flex flex-1" />
       </div>
     );
@@ -92,18 +83,15 @@ export function AppShell({ children }: { children: ReactNode }) {
         <Header
           onNewSong={openNewSongDialog}
           onGoHome={handleHome}
+          homeActive={onSongsScreen}
           showTitle={!desktop}
-          showSettings={desktop}
-          onOpenSettings={() => setSettingsOpen(true)}
-          onImport={desktop ? openImportDialog : undefined}
+          settings={desktop ? { href: SETTINGS_PATH, active: pathname === SETTINGS_PATH } : undefined}
           backgrounds={desktop ? { href: BACKGROUNDS_PATH, active: pathname === BACKGROUNDS_PATH } : undefined}
         />
         <div className="flex flex-1 overflow-hidden">
           <main className="flex-1 overflow-y-auto">{children}</main>
         </div>
         <NewSongDialog open={dialogOpen} onClose={() => setDialogOpen(false)} />
-        {desktop && <SettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />}
-        {desktop && <ImportSongDialog open={importOpen} onClose={() => setImportOpen(false)} />}
         {desktop && (
           <Modal open={discovered !== null} onClose={() => confirm(false)} title="Nova playlist encontrada">
             <div className="flex flex-col gap-4">

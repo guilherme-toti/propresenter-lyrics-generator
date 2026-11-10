@@ -10,8 +10,8 @@ interface PickRowProps {
   onClick: () => void;
 }
 
-/** One choice in a picker list: the song pickers in "Nova música", "Trocar gravação" and
- * "Importar do ProPresenter" all render their options with it. */
+/** One choice in a picker list: the song pickers in "Procurar música" and "Trocar gravação"
+ * render their options with it. */
 export function PickRow({ title, subtitle, trailing, busy = false, disabled = false, onClick }: PickRowProps) {
   return (
     <button

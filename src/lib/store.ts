@@ -20,7 +20,7 @@ interface LibraryState {
   startSong: (overrides?: Partial<Song>) => void;
   updateSong: (patch: Partial<Song>) => void;
   /** Clears the active song, same as starting a new one — the empty state is shown until another
-   * song is started or generated. Consistent with "Nova música", which already discards the
+   * song is started or generated. Consistent with "Procurar música", which already discards the
    * current song with no confirmation; this doesn't introduce a new destructive pattern. */
   goHome: () => void;
 

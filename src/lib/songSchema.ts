@@ -63,7 +63,7 @@ export const importableFileSchema = z.object({
 });
 export type ImportableFile = z.infer<typeof importableFileSchema>;
 
-/** What /api/songs/import-list and /api/songs/library-search answer. */
+/** What /api/songs/library-search answers. */
 export const importableFilesReplySchema = z.object({ files: z.array(importableFileSchema) });
 export type ImportableFilesReply = z.infer<typeof importableFilesReplySchema>;
 
