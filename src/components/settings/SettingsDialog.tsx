@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { Modal } from "@/components/ui/Modal";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Field";
@@ -12,11 +12,38 @@ import { parsePort } from "@/lib/desktop/parsePort";
 import { checkProPresenterFolder } from "@/lib/backgrounds/api";
 import { useDetectProPresenterFolder } from "@/lib/backgrounds/useDetectProPresenterFolder";
 import { errorMessage } from "@/lib/postJson";
+import { cn } from "@/lib/cn";
 import { PlaylistPickerModal } from "./PlaylistPickerModal";
 
 interface SettingsDialogProps {
   open: boolean;
   onClose: () => void;
+}
+
+/** A row's outcome. The icon says which kind it is, so the red never carries it alone. */
+function RowMessage({
+  tone,
+  className,
+  children,
+}: {
+  tone: "success" | "error";
+  className?: string;
+  children: ReactNode;
+}) {
+  const Icon = tone === "success" ? CheckCircle2 : AlertCircle;
+  return (
+    <p
+      role={tone === "error" ? "alert" : "status"}
+      className={cn(
+        "flex items-start gap-1.5 text-sm",
+        tone === "success" ? "text-ink/70" : "text-red-600",
+        className,
+      )}
+    >
+      <Icon size={16} aria-hidden className="mt-0.5 shrink-0" />
+      {children}
+    </p>
+  );
 }
 
 function FolderRow({
@@ -47,10 +74,9 @@ function FolderRow({
         </Button>
       </div>
       {error && (
-        <p className="mt-2 flex items-start gap-1.5 text-xs text-red-600">
-          <AlertCircle size={14} className="mt-0.5 shrink-0" />
+        <RowMessage tone="error" className="mt-2">
           {error}
-        </p>
+        </RowMessage>
       )}
     </section>
   );
@@ -167,12 +193,14 @@ function ProApiPortRow() {
         </Button>
       </div>
       {invalidInput ? (
-        <p className="mt-2 text-xs text-red-600">Porta inválida. Use um número entre 1 e 65535.</p>
+        <RowMessage tone="error" className="mt-2">
+          Porta inválida. Use um número entre 1 e 65535.
+        </RowMessage>
       ) : (
         result && (
-          <p className={`mt-2 text-xs ${result.ok ? "text-ink/60" : "text-red-600"}`}>
+          <RowMessage tone={result.ok ? "success" : "error"} className="mt-2">
             {result.message}
-          </p>
+          </RowMessage>
         )
       )}
     </section>
@@ -286,7 +314,7 @@ function ApiKeyRow({
             onChange={(e) => setValue(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && save()}
           />
-          {error && <p className="text-xs text-red-600">{error}</p>}
+          {error && <RowMessage tone="error">{error}</RowMessage>}
           <div className="flex justify-end gap-2">
             <Button variant="secondary" size="sm" onClick={cancelEditing} disabled={saving}>
               Cancelar
