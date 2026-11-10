@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useEffectEvent } from "react";
 import { X } from "lucide-react";
 import { cn } from "@/lib/cn";
+import { isTopModal, pushModal, removeModal } from "./modalStack";
 
 interface ModalProps {
   open: boolean;
@@ -13,14 +14,22 @@ interface ModalProps {
 }
 
 export function Modal({ open, onClose, title, className, children }: ModalProps) {
+  // The latest onClose, without re-running the effect: callers pass a new one on every render, and
+  // re-registering would move this modal to the top of the stack.
+  const close = useEffectEvent(onClose);
+
   useEffect(() => {
     if (!open) return;
+    const key = pushModal();
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
+      if (event.key === "Escape" && isTopModal(key)) close();
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [open, onClose]);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+      removeModal(key);
+    };
+  }, [open]);
 
   if (!open) return null;
 
