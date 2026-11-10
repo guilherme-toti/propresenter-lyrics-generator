@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Loader2, Send, X } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { AlertCircle, CheckCircle2, FolderSearch, Loader2, Send, Settings, X } from "lucide-react";
 import type { Song } from "@/lib/types";
-import { isDesktopApp } from "@/lib/tauri/env";
 import { useDesktopStore } from "@/lib/desktopStore";
+import { useAppShellActions } from "@/components/layout/AppShell";
+import { DismissibleAlert } from "@/components/ui/DismissibleAlert";
 import { PlaylistPickerModal } from "@/components/settings/PlaylistPickerModal";
 import { ExportOverwriteModal } from "@/components/studio/ExportOverwriteModal";
+import { Button } from "@/components/ui/Button";
 import { addToPlaylist, exportToLibraryFolder, findExportConflict } from "@/lib/desktop/api";
 import { playlistStillExists } from "@/lib/desktop/playlistStillExists";
-import { errorMessage, postForFile } from "@/lib/postJson";
+import { errorMessage } from "@/lib/postJson";
 import type { ExportConflict } from "@/lib/propresenter/libraries";
 
 interface SavedInfo {
@@ -22,11 +24,10 @@ interface SavedInfo {
 
 const SAVED_MESSAGE_TIMEOUT_MS = 15_000;
 
-/** Last path segment, minus the ".pro" extension — works for both "/a/b/Name.pro" (library save,
- * where the server may have adjusted the name, e.g. appending " (2)") and a plain "Name.pro"
- * (browser download's Content-Disposition filename). */
-function baseNameWithoutExt(fileNameOrPath: string): string {
-  const base = fileNameOrPath.split(/[\\/]/).pop() ?? fileNameOrPath;
+/** Last path segment, minus the ".pro" extension: the name the server actually wrote, which may
+ * differ from the one asked for (e.g. " (2)" appended). */
+function baseNameWithoutExt(path: string): string {
+  const base = path.split(/[\\/]/).pop() ?? path;
   return base.replace(/\.pro$/i, "");
 }
 
@@ -35,10 +36,32 @@ function copyToClipboard(text: string) {
   navigator.clipboard?.writeText(text).catch(() => {});
 }
 
+/** A notice stacked over the export button; its icon says what kind it is. */
+function Notice({ icon, onDismiss, children }: { icon: ReactNode; onDismiss: () => void; children: ReactNode }) {
+  return (
+    <div
+      role="status"
+      className="flex w-full max-w-sm items-start gap-2 rounded-xl border border-line bg-white px-3 py-2.5 text-sm text-ink shadow-lg"
+    >
+      {icon}
+      <div className="min-w-0 flex-1">{children}</div>
+      <button
+        type="button"
+        onClick={onDismiss}
+        aria-label="Fechar aviso"
+        className="shrink-0 rounded-full p-0.5 text-ink/40 transition-colors hover:bg-ink/5 hover:text-ink"
+      >
+        <X size={14} />
+      </button>
+    </div>
+  );
+}
+
 export function ExportFab({ song }: { song: Song }) {
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState<SavedInfo | null>(null);
+  const [askedForFolder, setAskedForFolder] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [conflict, setConflict] = useState<{ name: string; found: ExportConflict } | null>(null);
   const [conflictSaving, setConflictSaving] = useState(false);
@@ -49,6 +72,7 @@ export function ExportFab({ song }: { song: Song }) {
   const activePlaylist = useDesktopStore((s) => s.activePlaylist);
   const setActivePlaylist = useDesktopStore((s) => s.setActivePlaylist);
   const proApiPort = useDesktopStore((s) => s.proApiPort);
+  const { openSettings } = useAppShellActions();
 
   useEffect(() => {
     if (!saved) return;
@@ -101,51 +125,37 @@ export function ExportFab({ song }: { song: Song }) {
     });
   };
 
-  const downloadFile = async () => {
-    const { blob, fileName } = await postForFile("/api/export/propresenter", { song });
-    const filename = fileName ?? `${song.title || "musica"}.pro`;
-    copyToClipboard(baseNameWithoutExt(filename));
-
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
   const handleExport = async () => {
-    setStatus("loading");
     setError(null);
     setSaved(null);
+    // The Library folder is the only place a file can go: the desktop webview silently drops a
+    // browser download, so without the folder there is nothing to try.
+    setAskedForFolder(!libraryFolder);
+    if (!libraryFolder) return;
+
+    setStatus("loading");
     try {
-      if (isDesktopApp() && libraryFolder) {
-        if (activePlaylist && proApiPort) {
-          const stillThere = await playlistStillExists(proApiPort, activePlaylist.id);
-          if (!stillThere) {
-            setActivePlaylist(null);
-            setStatus("idle");
-            setPickerOpen(true);
-            return;
-          }
-        }
-
-        const name = song.title || "Música sem título";
-        const found = await findExportConflict(libraryFolder, name);
-
-        if (found) {
+      if (activePlaylist && proApiPort) {
+        const stillThere = await playlistStillExists(proApiPort, activePlaylist.id);
+        if (!stillThere) {
+          setActivePlaylist(null);
           setStatus("idle");
-          setConflictError(null);
-          setConflict({ name, found });
+          setPickerOpen(true);
           return;
         }
-
-        await exportToLibrary(libraryFolder);
-      } else {
-        await downloadFile();
       }
+
+      const name = song.title || "Música sem título";
+      const found = await findExportConflict(libraryFolder, name);
+
+      if (found) {
+        setStatus("idle");
+        setConflictError(null);
+        setConflict({ name, found });
+        return;
+      }
+
+      await exportToLibrary(libraryFolder);
       setStatus("idle");
     } catch (err) {
       setError(errorMessage(err));
@@ -169,56 +179,66 @@ export function ExportFab({ song }: { song: Song }) {
 
   return (
     <div className="fixed bottom-6 right-10 z-40 flex flex-col items-end gap-2">
+      {/* Gone by itself once a folder is chosen in Ajustes. */}
+      {askedForFolder && !libraryFolder && (
+        <Notice
+          icon={<FolderSearch size={16} aria-hidden className="mt-0.5 shrink-0 text-ink/60" />}
+          onDismiss={() => setAskedForFolder(false)}
+        >
+          <p>Pra exportar, escolha em Ajustes a pasta da Library do ProPresenter.</p>
+          <div className="mt-1 flex justify-end">
+            <Button variant="ghost" onClick={openSettings}>
+              <Settings size={16} aria-hidden />
+              Abrir Ajustes
+            </Button>
+          </div>
+        </Notice>
+      )}
       {error && (
-        <p className="max-w-xs rounded-lg border border-line bg-white px-3 py-2 text-xs text-red-600 shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
+        <DismissibleAlert className="w-full max-w-sm shadow-lg" onDismiss={() => setError(null)}>
           {error}
-        </p>
+        </DismissibleAlert>
       )}
       {saved && (
-        <div className="flex w-full max-w-sm items-start gap-2 rounded-lg border border-line bg-white px-3 py-2.5 text-xs text-ink shadow-[0_4px_16px_rgba(0,0,0,0.12)]">
-          <div className="flex-1">
-            <p>
-              Música importada com sucesso!
-              {saved.addedToPlaylist && saved.playlistName ? (
-                <>
-                  <br />
-                  Adicionada à playlist <strong>{saved.playlistName}</strong>.
-                </>
-              ) : (
-                <>
-                  <br />
-                  Procure por <strong>{saved.title}</strong> no ProPresenter
-                  {saved.playlistName ? (
-                    <>
-                      {" "}
-                      e arraste para a playlist <strong>{saved.playlistName}</strong>.
-                    </>
-                  ) : (
-                    "."
-                  )}
-                </>
-              )}
-            </p>
-            {saved.playlistError && (
-              <p className="mt-1 text-red-600">
-                Não deu pra adicionar à playlist. {saved.playlistError}
-              </p>
+        <Notice
+          icon={<CheckCircle2 size={16} aria-hidden className="mt-0.5 shrink-0" />}
+          onDismiss={() => setSaved(null)}
+        >
+          <p>
+            Música importada com sucesso!
+            {saved.addedToPlaylist && saved.playlistName ? (
+              <>
+                <br />
+                Adicionada à playlist <strong>{saved.playlistName}</strong>.
+              </>
+            ) : (
+              <>
+                <br />
+                Procure por <strong>{saved.title}</strong> no ProPresenter
+                {saved.playlistName ? (
+                  <>
+                    {" "}
+                    e arraste para a playlist <strong>{saved.playlistName}</strong>.
+                  </>
+                ) : (
+                  "."
+                )}
+              </>
             )}
-          </div>
-          <button
-            onClick={() => setSaved(null)}
-            aria-label="Fechar aviso"
-            className="shrink-0 rounded-full p-0.5 text-ink/40 transition-colors hover:bg-ink/5 hover:text-ink"
-          >
-            <X size={14} />
-          </button>
-        </div>
+          </p>
+          {saved.playlistError && (
+            <p className="mt-1 flex items-start gap-1.5 text-red-600">
+              <AlertCircle size={16} aria-hidden className="mt-0.5 shrink-0" />
+              <span>Não deu pra adicionar à playlist. {saved.playlistError}</span>
+            </p>
+          )}
+        </Notice>
       )}
       <button
         onClick={handleExport}
         disabled={!canExport || status === "loading"}
         title={canExport ? undefined : "Alinhe pelo menos uma linha antes de exportar."}
-        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-[0_6px_24px_rgba(255,255,255,0.55)] transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex items-center gap-2 rounded-full bg-ink px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-white/80 transition-colors hover:bg-ink/90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {status === "loading" ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
         Enviar para ProPresenter

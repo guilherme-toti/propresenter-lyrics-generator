@@ -13,17 +13,18 @@ async function readJsonObject(res: Response): Promise<Record<string, unknown>> {
   return parsed !== null && typeof parsed === "object" ? (parsed as Record<string, unknown>) : {};
 }
 
-/** Calls one of the app's own routes and hands a successful reply to `readOk`. A failed request
- * throws the route's own `error` message, which is written to be shown to the user as-is. A dropped
+/** Calls one of the app's own routes and answers its JSON reply. A failed request throws the
+ * route's own `error` message, which is written to be shown to the user as-is. A dropped
  * connection or a reply that can't be read would otherwise put the browser's English ("Load
  * failed", "Unexpected end of JSON input") on screen, so those become a plain message and the
  * detail goes to the console. */
-async function callRoute<T>(url: string, init: RequestInit, readOk: (res: Response) => Promise<T>): Promise<T> {
+async function callRoute(url: string, init: RequestInit): Promise<Record<string, unknown>> {
   let routeError: unknown;
   try {
     const res = await fetch(url, init);
-    if (res.ok) return await readOk(res);
-    routeError = (await readJsonObject(res)).error;
+    const reply = await readJsonObject(res);
+    if (res.ok) return reply;
+    routeError = reply.error;
   } catch (err) {
     // A cancel the caller asked for isn't a failure to report; it checks for the AbortError itself.
     if (init.signal?.aborted) throw err;
@@ -33,33 +34,14 @@ async function callRoute<T>(url: string, init: RequestInit, readOk: (res: Respon
   throw new Error(typeof routeError === "string" ? routeError : GENERIC_ERROR);
 }
 
-/** The routes only accept JSON bodies (see src/proxy.ts). */
-function jsonPost(body: unknown, signal?: AbortSignal): RequestInit {
-  return { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), signal };
-}
-
 export function postJson(url: string, body: unknown, options?: JsonRequestOptions): Promise<Record<string, unknown>> {
-  return callRoute(url, jsonPost(body, options?.signal), readJsonObject);
-}
-
-export interface DownloadedFile {
-  blob: Blob;
-  /** The name the route suggests in Content-Disposition, or null when it suggests none. */
-  fileName: string | null;
-}
-
-function suggestedFileName(contentDisposition: string | null): string | null {
-  const match = /filename="?([^"]+)"?/.exec(contentDisposition ?? "");
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-/** postJson for a route that answers with a file to download instead of JSON. Its failures read
- * the same way, since the route still answers those as JSON. */
-export function postForFile(url: string, body: unknown): Promise<DownloadedFile> {
-  return callRoute(url, jsonPost(body), async (res) => ({
-    blob: await res.blob(),
-    fileName: suggestedFileName(res.headers.get("Content-Disposition")),
-  }));
+  // The routes only accept JSON bodies (see src/proxy.ts).
+  return callRoute(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    signal: options?.signal,
+  });
 }
 
 /** A reply in another shape than its schema (a renamed field, or an older server binary in the app
@@ -84,7 +66,7 @@ export async function postJsonAs<S extends z.ZodType>(
 
 /** The same for a route read with GET. */
 export async function getJsonAs<S extends z.ZodType>(url: string, schema: S): Promise<z.output<S>> {
-  return parseReply(`GET ${url}`, await callRoute(url, { method: "GET" }, readJsonObject), schema);
+  return parseReply(`GET ${url}`, await callRoute(url, { method: "GET" }), schema);
 }
 
 export function errorMessage(err: unknown): string {

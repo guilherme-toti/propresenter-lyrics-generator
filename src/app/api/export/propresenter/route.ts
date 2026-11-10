@@ -9,9 +9,9 @@ import { songSchema } from "@/lib/songSchema";
 
 const bodySchema = z.object({
   song: songSchema,
-  // Set once a Library folder is chosen in Ajustes: the .pro is written straight into
-  // this folder (a ProPresenter Library folder) instead of being returned for download.
-  destinationFolder: z.string().min(1).optional(),
+  // The ProPresenter Library folder chosen in Ajustes: the .pro is written straight into it. The
+  // app is desktop-only and asks for the folder before exporting, so there's no download fallback.
+  destinationFolder: z.string().min(1),
   // User-chosen name from ExportOverwriteModal (see /api/export/check-conflict) — overrides the
   // filename that'd otherwise be derived from song.title. Base name only, no ".pro".
   fileName: z.string().min(1).optional(),
@@ -35,9 +35,6 @@ export async function POST(request: Request) {
     const filename = fileName ? `${sanitizeFileBaseName(fileName)}.pro` : proFileName(song);
 
     if (overwritePath) {
-      if (!destinationFolder) {
-        return NextResponse.json({ error: "Requisição inválida." }, { status: 400 });
-      }
       // overwritePath comes from a prior check-conflict response, but it's still client-supplied —
       // never write outside the Libraries folder tree it was found in.
       const librariesParent = path.dirname(destinationFolder);
@@ -49,23 +46,13 @@ export async function POST(request: Request) {
       return NextResponse.json({ savedTo: resolvedOverwrite });
     }
 
-    if (destinationFolder) {
-      const savedTo = await writeUniqueFile(destinationFolder, filename, buffer);
-      return NextResponse.json({ savedTo });
-    }
-
-    return new NextResponse(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "Content-Disposition": `attachment; filename="${encodeURIComponent(filename)}"`,
-      },
-    });
+    const savedTo = await writeUniqueFile(destinationFolder, filename, buffer);
+    return NextResponse.json({ savedTo });
   } catch (error) {
     console.error("propresenter export failed", error);
-    const message = destinationFolder
-      ? "Falha ao salvar o arquivo na pasta escolhida."
-      : "Falha ao gerar o arquivo do ProPresenter.";
-    return NextResponse.json({ error: message }, { status: 500 });
+    return NextResponse.json(
+      { error: "Não deu pra salvar na pasta da Library. Confira em Ajustes se ela ainda existe e tente de novo." },
+      { status: 500 },
+    );
   }
 }

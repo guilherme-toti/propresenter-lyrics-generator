@@ -1,6 +1,6 @@
 import { afterEach, mock, test } from "node:test";
 import assert from "node:assert/strict";
-import { getJsonAs, postForFile, postJsonAs } from "./postJson.ts";
+import { getJsonAs, postJsonAs } from "./postJson.ts";
 import { maskedApiKeyReplySchema } from "./desktop/envEntry.ts";
 import { slotChangeReplySchema } from "./propresenter/backgrounds/contracts.ts";
 import { answerWith, silenceConsoleError, UNEXPECTED_REPLY } from "./testing/fetchMock.mts";
@@ -68,38 +68,4 @@ test("reads a GET reply against its schema too", async () => {
   answerWith(200, { key: "sk-or-…a1b2" });
   silenceConsoleError();
   await assert.rejects(getJsonAs("/api/settings/api-key", maskedApiKeyReplySchema), { message: UNEXPECTED_REPLY });
-});
-
-test("hands back a downloaded file with the name the route suggests", async () => {
-  const bytes = new Uint8Array([0x0a, 0x10, 0x20]);
-  const fetchMock = mock.method(globalThis, "fetch", async () =>
-    new Response(bytes, {
-      headers: { "Content-Disposition": `attachment; filename="${encodeURIComponent("Grande é o Senhor.pro")}"` },
-    }),
-  );
-
-  const { blob, fileName } = await postForFile("/api/export/propresenter", { song: { title: "Grande é o Senhor" } });
-
-  assert.equal(fileName, "Grande é o Senhor.pro");
-  assert.deepEqual(new Uint8Array(await blob.arrayBuffer()), bytes);
-  const init = fetchMock.mock.calls[0].arguments[1];
-  assert.equal(init?.method, "POST");
-  assert.deepEqual(init?.headers, { "Content-Type": "application/json" });
-});
-
-test("says something plain when the connection drops during a download", async () => {
-  mock.method(globalThis, "fetch", async () => {
-    throw new TypeError("Failed to fetch");
-  });
-  silenceConsoleError();
-
-  await assert.rejects(postForFile("/api/export/propresenter", { song: {} }), {
-    message: "Algo deu errado. Tente de novo.",
-  });
-});
-
-test("keeps the route's own message when a download fails", async () => {
-  const message = "Falha ao gerar o arquivo do ProPresenter.";
-  answerWith(500, { error: message });
-  await assert.rejects(postForFile("/api/export/propresenter", { song: {} }), { message });
 });
