@@ -1,18 +1,13 @@
-import { createReadStream } from "node:fs";
 import fs from "node:fs/promises";
-import { Readable } from "node:stream";
 import { NextResponse } from "next/server";
 import { parseByteRange } from "@/lib/byteRange";
+import { fileStream } from "./fileStream";
 import { contentTypeFor } from "./media";
 
 export function mediaNotFoundResponse(): NextResponse {
   return NextResponse.json({ error: "Arquivo não encontrado." }, { status: 404 });
 }
 
-function streamFile(filePath: string, range?: { start: number; end: number }): ReadableStream<Uint8Array> {
-  // toWeb() destroys the file stream when the browser cancels, which <video> does on every seek.
-  return Readable.toWeb(createReadStream(filePath, range)) as ReadableStream<Uint8Array>;
-}
 
 /**
  * Serves an image or video to the Backgrounds screen's <img> and <video>. Callers resolve the path
@@ -42,9 +37,9 @@ export async function mediaFileResponse(filePath: string, fileName: string, rang
   if (range) {
     headers.set("Content-Range", `bytes ${range.start}-${range.end}/${stat.size}`);
     headers.set("Content-Length", String(range.end - range.start + 1));
-    return new Response(streamFile(filePath, range), { status: 206, headers });
+    return new Response(fileStream(filePath, range), { status: 206, headers });
   }
 
   headers.set("Content-Length", String(stat.size));
-  return new Response(streamFile(filePath), { status: 200, headers });
+  return new Response(fileStream(filePath), { status: 200, headers });
 }
