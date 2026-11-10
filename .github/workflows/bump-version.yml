@@ -2,7 +2,10 @@ name: Bump version and release
 
 # Manually triggered: pick a semver part, and this bumps src-tauri/tauri.conf.json's
 # version, commits it, tags it (vX.Y.Z), and pushes both — which in turn triggers
-# release.yml (it listens for "v*" tag pushes) to actually build and draft the release.
+# release.yml (it listens for "v*" tag pushes) to actually build the release. Its
+# `release` job builds every platform into a draft GitHub Release, and its `publish`
+# job publishes that draft once all three builds succeed; if any fails, the release
+# stays a draft.
 #
 # Pushing with the default GITHUB_TOKEN wouldn't trigger that downstream workflow —
 # GitHub deliberately doesn't cascade workflow runs off GITHUB_TOKEN-authenticated
