@@ -7,6 +7,7 @@ import {
   slotChangeReplySchema,
   type AddTrayFilesReply,
   type BackgroundsOverview,
+  type DetectedFolderReply,
   type MediaSlot,
   type SeparateSlotReply,
 } from "@/lib/propresenter/backgrounds/contracts";
@@ -23,13 +24,13 @@ import type {
 
 /** The Backgrounds screen's only way to the /api/backgrounds routes. */
 
-/** The workspace ProPresenter lists as its own, or null when none is found. Never throws: not
+/** The workspace ProPresenter lists as its own (folder null when none is found). Never throws: not
  * finding it just leaves the setting for the user to fill. */
-export async function detectProPresenterFolder(): Promise<string | null> {
+export async function detectProPresenterFolder(): Promise<DetectedFolderReply> {
   try {
-    return (await getJsonAs("/api/backgrounds/workspace", detectedFolderReplySchema)).folder;
+    return await getJsonAs("/api/backgrounds/workspace", detectedFolderReplySchema);
   } catch {
-    return null;
+    return { folder: null, hasMacros: false };
   }
 }
 

@@ -91,5 +91,7 @@ export const separateSlotReplySchema = z.object({
 export type SeparateSlotReply = z.infer<typeof separateSlotReplySchema>;
 
 /** The workspace ProPresenter lists as its own, or null when none was found. */
-export const detectedFolderReplySchema = z.object({ folder: z.string().nullable() });
+/** `hasMacros`: whether the folder has macros that show a file, so the Backgrounds screen only
+ * suggests a folder that would show something. */
+export const detectedFolderReplySchema = z.object({ folder: z.string().nullable(), hasMacros: z.boolean() });
 export type DetectedFolderReply = z.infer<typeof detectedFolderReplySchema>;

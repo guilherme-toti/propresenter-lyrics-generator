@@ -11,7 +11,7 @@ import {
 /** Prefills "Pasta do ProPresenter". Finding nothing is an answer (`folder: null`), not a failure:
  * the user just picks the folder by hand. */
 export async function GET() {
-  return NextResponse.json({ folder: await detectWorkspaceFolder() } satisfies DetectedFolderReply);
+  return NextResponse.json((await detectWorkspaceFolder()) satisfies DetectedFolderReply);
 }
 
 /** Checks a folder the user picked before it's saved. Like /api/propresenter/ping, a folder that

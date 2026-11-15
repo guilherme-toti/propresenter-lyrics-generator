@@ -151,7 +151,7 @@ function FolderRow({
 function ProPresenterFolderRow() {
   const folder = useDesktopStore((s) => s.proPresenterFolder);
   const setFolder = useDesktopStore((s) => s.setProPresenterFolder);
-  const detecting = useDetectProPresenterFolder();
+  const { detecting } = useDetectProPresenterFolder();
   const [error, setError] = useState<string | null>(null);
 
   const pick = async () => {

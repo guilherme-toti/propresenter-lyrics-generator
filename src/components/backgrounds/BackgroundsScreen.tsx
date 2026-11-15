@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   AlertCircle,
   Clapperboard,
   Film,
+  FolderCheck,
   FolderSearch,
   Image as ImageIcon,
   Info,
@@ -85,7 +86,8 @@ export function BackgroundsScreen() {
   const { openSettings } = useAppShellActions();
   const overviewState = useBackgroundsOverview(folder);
   const { overview, error, loading, reload } = overviewState;
-  const detecting = useDetectProPresenterFolder(overview !== null && overview.macros.length === 0);
+  const setFolder = useDesktopStore((s) => s.setProPresenterFolder);
+  const { detecting, otherFolder } = useDetectProPresenterFolder(overview !== null && overview.macros.length === 0);
   const draft = useBackgroundsDraft();
   const actions = useDraftActions(folder, overviewState);
   const [screenError, setScreenError] = useState<string | null>(null);
@@ -157,6 +159,35 @@ export function BackgroundsScreen() {
       Atualizar
     </Button>
   );
+
+  if (overview.macros.length === 0 && otherFolder) {
+    return (
+      <EmptyState
+        icon={<FolderSearch size={26} aria-hidden />}
+        title="Achamos suas macros em outra pasta"
+        action={
+          <>
+            <Button onClick={() => setFolder(otherFolder)}>
+              <FolderCheck size={16} aria-hidden />
+              Usar essa pasta
+            </Button>
+            {openSettingsButton("ghost")}
+          </>
+        }
+      >
+        A pasta escolhida em Ajustes não tem macros com fundo ou prop. Esta tem:
+        <span className="mt-2 block font-medium wrap-anywhere text-ink/80">
+          {/* Breaks after each separator, so a long path wraps between folder names, not inside one. */}
+          {otherFolder.split(/(?<=[\\/])/).map((part, index) => (
+            <Fragment key={index}>
+              {part}
+              <wbr />
+            </Fragment>
+          ))}
+        </span>
+      </EmptyState>
+    );
+  }
 
   if (overview.macros.length === 0) {
     return (

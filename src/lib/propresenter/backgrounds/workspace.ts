@@ -43,13 +43,18 @@ async function childDirectories(parentDir: string): Promise<string[]> {
   }
 }
 
+export interface DetectedWorkspace {
+  folder: string | null;
+  hasMacros: boolean;
+}
+
 /**
  * The first workspace ProPresenter lists that has macros with media, falling back to the first
- * valid workspace folder found. Null when none is found, which leaves the setting for the user to fill.
+ * valid workspace folder found. A null folder leaves the setting for the user to fill.
  */
-export async function detectWorkspaceFolder(): Promise<string | null> {
+export async function detectWorkspaceFolder(): Promise<DetectedWorkspace> {
   const supportDir = proPresenterSupportDir();
-  if (!supportDir) return null;
+  if (!supportDir) return { folder: null, hasMacros: false };
 
   const [listed, pathSettingsBase, localWorkspaces, userWorkspaces] = await Promise.all([
     fs
@@ -95,7 +100,7 @@ export async function detectWorkspaceFolder(): Promise<string | null> {
 
   for (const candidate of valid) {
     const map = await readMacroMedia(candidate).catch(() => null);
-    if (map && map.macros.length > 0) return candidate;
+    if (map && map.macros.length > 0) return { folder: candidate, hasMacros: true };
   }
-  return valid[0] ?? null;
+  return { folder: valid[0] ?? null, hasMacros: false };
 }
