@@ -35,3 +35,19 @@ export function parseWorkspacePaths(toml: string): string[] {
   }
   return paths;
 }
+
+/**
+ * Reads `Base=...;` from ProPresenter's `PathSettings.proPaths`. ProPresenter on Windows either
+ * escapes backslashes (`Base=C:\\Users\\...\\ProPresenter\\;`) or writes them plain.
+ */
+export function parsePathSettingsBase(contents: string): string | null {
+  const match = /(?:^|[\r\n;])\s*Base\s*=\s*([^;\r\n]+)/.exec(contents);
+  if (!match) return null;
+  let value = match[1].trim().replace(/^"(.*)"$/, "$1");
+  if (!value) return null;
+  if (/^[A-Za-z]:\\\\/.test(value) || value.startsWith("\\\\\\\\")) {
+    value = value.replace(/\\\\/g, "\\");
+  }
+  const stripped = value.replace(/[\\/]+$/, "");
+  return stripped || null;
+}

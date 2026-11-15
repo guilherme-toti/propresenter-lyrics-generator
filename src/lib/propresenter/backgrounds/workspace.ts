@@ -1,7 +1,9 @@
 import fs from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { userAppDataDir } from "@/lib/desktop/appConfigDir";
-import { parseWorkspacePaths } from "./mediaManagerToml";
+import { readMacroMedia } from "./library";
+import { parsePathSettingsBase, parseWorkspacePaths } from "./mediaManagerToml";
 
 /** Finds and checks the ProPresenter workspace folder: the one holding `Configuration/Macros`,
  * `Configuration/Props` and `Media/Assets`. */
@@ -25,27 +27,75 @@ export async function isWorkspaceFolder(folder: string): Promise<boolean> {
   }
 }
 
-/** Where ProPresenter keeps its support files. The Windows location follows the macOS one and
- * hasn't been checked on a real Windows install. */
+/** Where ProPresenter keeps its support files (`~/Library/Application Support/RenewedVision/ProPresenter`
+ * on macOS, `%APPDATA%\RenewedVision\ProPresenter` on Windows). */
 function proPresenterSupportDir(): string | null {
   if (process.platform !== "darwin" && process.platform !== "win32") return null;
   return path.join(userAppDataDir(), "RenewedVision", "ProPresenter");
 }
 
-/** The first workspace ProPresenter lists that really is one, falling back to its default
- * location. Null when neither is found, which just leaves the setting for the user to fill. */
+async function childDirectories(parentDir: string): Promise<string[]> {
+  try {
+    const entries = await fs.readdir(parentDir, { withFileTypes: true });
+    return entries.filter((entry) => entry.isDirectory()).map((entry) => path.join(parentDir, entry.name));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * The first workspace ProPresenter lists that has macros with media, falling back to the first
+ * valid workspace folder found. Null when none is found, which leaves the setting for the user to fill.
+ */
 export async function detectWorkspaceFolder(): Promise<string | null> {
   const supportDir = proPresenterSupportDir();
   if (!supportDir) return null;
 
-  const listed = await fs
-    .readFile(path.join(supportDir, "media-manager.toml"), "utf-8")
-    .then(parseWorkspacePaths)
-    .catch(() => []);
-  const candidates = [...listed, path.join(supportDir, "UserWorkspaces", "ProPresenter")];
+  const [listed, pathSettingsBase, localWorkspaces, userWorkspaces] = await Promise.all([
+    fs
+      .readFile(path.join(supportDir, "media-manager.toml"), "utf-8")
+      .then(parseWorkspacePaths)
+      .catch(() => []),
+    fs
+      .readFile(path.join(supportDir, "PathSettings.proPaths"), "utf-8")
+      .then(parsePathSettingsBase)
+      .catch(() => null),
+    childDirectories(path.join(supportDir, "LocalWorkspaces")),
+    childDirectories(path.join(supportDir, "UserWorkspaces")),
+  ]);
 
-  for (const candidate of candidates) {
-    if (await isWorkspaceFolder(candidate)) return candidate;
+  const home = os.homedir();
+  const oneDriveDirs = [process.env.OneDrive, process.env.OneDriveConsumer].filter(
+    (dir): dir is string => Boolean(dir?.trim()),
+  );
+
+  const candidates = [
+    ...listed,
+    ...(pathSettingsBase ? [pathSettingsBase] : []),
+    path.join(supportDir, "LocalWorkspaces", "ProPresenter"),
+    ...localWorkspaces,
+    path.join(supportDir, "UserWorkspaces", "ProPresenter"),
+    ...userWorkspaces,
+    path.join(home, "Documents", "ProPresenter"),
+    ...oneDriveDirs.map((dir) => path.join(dir, "Documents", "ProPresenter")),
+  ];
+
+  const seen = new Set<string>();
+  const valid: string[] = [];
+  for (const raw of candidates) {
+    const candidate = raw.trim();
+    if (!candidate) continue;
+    const key = process.platform === "win32" ? candidate.toLowerCase() : candidate;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (await isWorkspaceFolder(candidate)) {
+      valid.push(candidate);
+    }
   }
-  return null;
+
+  for (const candidate of valid) {
+    const map = await readMacroMedia(candidate).catch(() => null);
+    if (map && map.macros.length > 0) return candidate;
+  }
+  return valid[0] ?? null;
 }

@@ -82,10 +82,10 @@ function LoadingLine({ children }: { children: ReactNode }) {
 export function BackgroundsScreen() {
   const folder = useDesktopStore((s) => s.proPresenterFolder);
   const port = useDesktopStore((s) => s.proApiPort);
-  const detecting = useDetectProPresenterFolder();
   const { openSettings } = useAppShellActions();
   const overviewState = useBackgroundsOverview(folder);
   const { overview, error, loading, reload } = overviewState;
+  const detecting = useDetectProPresenterFolder(overview !== null && overview.macros.length === 0);
   const draft = useBackgroundsDraft();
   const actions = useDraftActions(folder, overviewState);
   const [screenError, setScreenError] = useState<string | null>(null);
@@ -163,9 +163,15 @@ export function BackgroundsScreen() {
       <EmptyState
         icon={<Clapperboard size={26} aria-hidden />}
         title="Nenhuma macro com fundo ou prop"
-        action={refreshButton}
+        action={
+          <>
+            {openSettingsButton("secondary")}
+            {refreshButton}
+          </>
+        }
       >
-        Crie no ProPresenter uma macro que mostre um fundo ou um prop. Depois, clique em “Atualizar”.
+        Crie no ProPresenter uma macro que mostre um fundo ou um prop, ou confira em Ajustes se a pasta do ProPresenter
+        está certa. Depois, clique em “Atualizar”.
       </EmptyState>
     );
   }

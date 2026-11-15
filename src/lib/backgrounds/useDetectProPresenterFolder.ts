@@ -5,27 +5,31 @@ import { useDesktopStore } from "@/lib/desktopStore";
 import { detectProPresenterFolder } from "./api";
 
 /**
- * Fills "Pasta do ProPresenter" by itself while it's empty, so most people never have to look for
- * it. A folder the user chose is never replaced. Returns true while the lookup is running.
+ * Fills "Pasta do ProPresenter" by itself while it's empty (or if the saved folder has no macros
+ * and another workspace on the machine does), so most people never have to look for it. Returns
+ * true while the initial lookup is running.
  */
-export function useDetectProPresenterFolder(): boolean {
+export function useDetectProPresenterFolder(recheckWhenEmpty = false): boolean {
   const folder = useDesktopStore((s) => s.proPresenterFolder);
   const setFolder = useDesktopStore((s) => s.setProPresenterFolder);
   const [finished, setFinished] = useState(false);
 
   useEffect(() => {
-    if (folder !== null) return;
+    if (folder !== null && !recheckWhenEmpty) return;
     let cancelled = false;
     void detectProPresenterFolder().then((detected) => {
       if (cancelled) return;
-      // The user may have picked a folder while the lookup ran.
-      if (detected && useDesktopStore.getState().proPresenterFolder === null) setFolder(detected);
+      const current = useDesktopStore.getState().proPresenterFolder;
+      // Only fill when unset, or switch away from an empty workspace if detection found a better one.
+      if (detected && (current === null || (recheckWhenEmpty && current === folder && detected !== current))) {
+        setFolder(detected);
+      }
       setFinished(true);
     });
     return () => {
       cancelled = true;
     };
-  }, [folder, setFolder]);
+  }, [folder, recheckWhenEmpty, setFolder]);
 
   return folder === null && !finished;
 }

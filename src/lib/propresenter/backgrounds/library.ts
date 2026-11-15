@@ -67,7 +67,7 @@ export async function readMacroMedia(folder: string): Promise<MacroMediaMap> {
   const macros = decodeDocument<DecodedMacrosDocument>(await getMacrosDocumentType(), macrosBuffer);
   const props = propsBuffer ? decodeDocument<DecodedPropDocument>(await getPropDocumentType(), propsBuffer) : {};
 
-  const map = mapMacroMedia(macros, props, { windows: process.platform === "win32" });
+  const map = mapMacroMedia(macros, props, { windows: process.platform === "win32", folder });
   macroMediaCache().set(folder, { stamp, map });
   return map;
 }

@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseWorkspacePaths } from "./mediaManagerToml.ts";
+import { parsePathSettingsBase, parseWorkspacePaths } from "./mediaManagerToml.ts";
 
 test("reads the workspace path from the file ProPresenter writes on macOS", () => {
   // Verbatim from a real ProPresenter 21.4 install.
@@ -55,4 +55,16 @@ path = "/sync/folder"
 test("returns nothing for a file with no workspaces", () => {
   assert.deepEqual(parseWorkspacePaths("[preferences]\nmanage_media = false\n"), []);
   assert.deepEqual(parseWorkspacePaths(""), []);
+});
+
+test("reads Base from PathSettings.proPaths on Windows", () => {
+  assert.equal(
+    parsePathSettingsBase("Base=C:\\\\Users\\\\Igreja\\\\Documents\\\\ProPresenter\\\\;\r\nShows=Shows\\;\r\n"),
+    "C:\\Users\\Igreja\\Documents\\ProPresenter",
+  );
+  assert.equal(
+    parsePathSettingsBase("Shows=Shows\\;Base=C:\\Users\\Igreja\\OneDrive\\Documents\\ProPresenter\\;"),
+    "C:\\Users\\Igreja\\OneDrive\\Documents\\ProPresenter",
+  );
+  assert.equal(parsePathSettingsBase("Shows=Shows\\;"), null);
 });

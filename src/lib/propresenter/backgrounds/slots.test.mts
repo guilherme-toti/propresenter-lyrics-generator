@@ -278,6 +278,109 @@ test("carries each macro's ProPresenter colour as CSS", () => {
   assert.equal(macros[1].macroColor, null);
 });
 
+test("reads raw Windows paths written by ProPresenter on Windows without a file: scheme", () => {
+  const macros: DecodedMacrosDocument = {
+    macros: [
+      {
+        uuid: { string: "A8100000-0000-0000-0000-000000000001" },
+        name: "Início",
+        actions: [mediaAction(videoMedia("C:\\Users\\Igreja\\Documents\\ProPresenter\\Media\\Assets\\Fundo Azul.mp4"))],
+      },
+      {
+        uuid: { string: "A8100000-0000-0000-0000-000000000002" },
+        name: "Meio",
+        actions: [mediaAction(videoMedia("C:/Users/Igreja/Documents/ProPresenter/Media/Assets/Fundo%20Azul.mp4"))],
+      },
+      {
+        uuid: { string: "A8100000-0000-0000-0000-000000000003" },
+        name: "Rede",
+        actions: [mediaAction(imageMedia("\\\\Servidor\\Midia\\Logo.png"))],
+      },
+    ],
+  };
+  const map = mapMacroMedia(macros, {}, { windows: true });
+  assert.equal(map.slots.length, 2);
+  assert.equal(map.slots[0].filePath, "C:\\Users\\Igreja\\Documents\\ProPresenter\\Media\\Assets\\Fundo Azul.mp4");
+  assert.equal(map.slots[0].fileName, "Fundo Azul.mp4");
+  assert.equal(map.slots[1].filePath, "\\\\Servidor\\Midia\\Logo.png");
+  assert.equal(map.slots[1].fileName, "Logo.png");
+  assert.deepEqual(filesByMacro(map), {
+    Início: { backgrounds: ["Fundo Azul.mp4"], props: [] },
+    Meio: { backgrounds: ["Fundo Azul.mp4"], props: [] },
+    Rede: { backgrounds: ["Logo.png"], props: [] },
+  });
+});
+
+test("resolves workspace-relative URLs (ROOT_SHOW = 10) on Windows even when absoluteString came from macOS", () => {
+  const folder = "C:\\Users\\Igreja\\AppData\\Roaming\\RenewedVision\\ProPresenter\\LocalWorkspaces\\ProPresenter";
+  const macros: DecodedMacrosDocument = {
+    macros: [
+      {
+        uuid: { string: "A8200000-0000-0000-0000-000000000001" },
+        name: "Migrada do Mac",
+        actions: [
+          {
+            media: {
+              element: {
+                url: {
+                  absoluteString:
+                    "file:///Users/pma/Library/Application%20Support/RenewedVision/ProPresenter/UserWorkspaces/ProPresenter/Media/Assets/abertura.mp4",
+                  local: { root: 10, path: "Media/Assets/abertura.mp4" },
+                },
+                video: {},
+              },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const map = mapMacroMedia(macros, {}, { windows: true, folder });
+  assert.equal(map.slots.length, 1);
+  assert.equal(map.slots[0].filePath, `${folder}\\Media\\Assets\\abertura.mp4`);
+  assert.equal(map.slots[0].fileName, "abertura.mp4");
+  assert.deepEqual(filesByMacro(map), {
+    "Migrada do Mac": { backgrounds: ["abertura.mp4"], props: [] },
+  });
+});
+
+test("reads image or video media type from action.media when element only carries the URL", () => {
+  const macros: DecodedMacrosDocument = {
+    macros: [
+      {
+        uuid: { string: "A8300000-0000-0000-0000-000000000001" },
+        name: "Pelo action",
+        actions: [
+          {
+            media: {
+              element: {
+                url: { absoluteString: "C:\\Users\\Igreja\\Media\\Assets\\fundo.mp4" },
+              },
+              video: {},
+            },
+          },
+          {
+            media: {
+              element: {
+                url: { absoluteString: "C:\\Users\\Igreja\\Media\\Assets\\arte.png" },
+              },
+              image: {},
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const { slots } = mapMacroMedia(macros, {}, { windows: true });
+  assert.deepEqual(
+    slots.map((slot) => [slot.fileName, slot.mediaType]),
+    [
+      ["fundo.mp4", "video"],
+      ["arte.png", "image"],
+    ],
+  );
+});
+
 test("ignores URLs that aren't files on disk", () => {
   const macros: DecodedMacrosDocument = {
     macros: [

@@ -34,13 +34,27 @@ interface DecodedColor {
   blue?: number;
 }
 
+/** `ROOT_SHOW` in `rv.data.URL.LocalRelativePath.Root` (basicTypes.proto): the workspace folder. */
+const ROOT_SHOW = 10;
+
+interface DecodedUrl {
+  absoluteString?: string;
+  local?: { root?: number; path?: string };
+}
+
 interface DecodedMedia {
-  url?: { absoluteString?: string };
+  url?: DecodedUrl;
   image?: object;
   /** In seconds: `endPoint` is how long ProPresenter believes the file is, `outPoint` where it stops
    * (earlier when the video was trimmed there). Both are re-read a few seconds after the file
    * changes; until then a longer video still stops at the old end. */
   video?: { transport?: { outPoint?: number; endPoint?: number } };
+}
+
+interface DecodedActionMedia {
+  element?: DecodedMedia;
+  image?: object;
+  video?: object;
 }
 
 export interface DecodedMacrosDocument {
@@ -49,7 +63,7 @@ export interface DecodedMacrosDocument {
     name?: string;
     color?: DecodedColor;
     actions?: {
-      media?: { element?: DecodedMedia };
+      media?: DecodedActionMedia;
       prop?: { identification?: { parameterUuid?: DecodedUuid; parameterName?: string } };
     }[];
   }[];
@@ -60,20 +74,23 @@ export interface DecodedPropDocument {
     uuid?: DecodedUuid;
     name?: string;
     actions?: {
+      media?: DecodedActionMedia;
       slide?: { prop?: { baseSlide?: { elements?: { element?: { fill?: { media?: DecodedMedia } } }[] } } };
     }[];
   }[];
 }
 
 export interface MapMacroMediaOptions {
-  /** Whether the URLs were written on Windows (`file:///C:/…`). The server passes its own
-   * platform; tests pass both. */
+  /** Whether the paths belong to Windows (`C:\…`). The server passes its own platform; tests
+   * pass both. */
   windows: boolean;
+  /** The workspace folder on disk, to resolve `ROOT_SHOW` relative paths (`Media/Assets/…`). */
+  folder?: string;
 }
 
-function mediaTypeOf(media: DecodedMedia): MediaType | null {
-  if (media.video) return "video";
-  if (media.image) return "image";
+function mediaTypeOf(media: DecodedMedia, actionMedia?: DecodedActionMedia): MediaType | null {
+  if (media.video || actionMedia?.video) return "video";
+  if (media.image || actionMedia?.image) return "image";
   return null;
 }
 
@@ -83,13 +100,51 @@ function normalizeUuid(uuid: string | undefined): string | null {
   return trimmed ? trimmed.toUpperCase() : null;
 }
 
-function toFilePath(url: string | undefined, windows: boolean): string | null {
-  if (!url?.startsWith("file:")) return null;
+function decodePercent(value: string): string {
+  if (!/%[0-9a-fA-F]{2}/.test(value)) return value;
   try {
-    return fileURLToPath(url, { windows });
+    return decodeURIComponent(value);
   } catch {
-    return null;
+    return value;
   }
+}
+
+function toFilePath(url: string | undefined, windows: boolean): string | null {
+  if (!url) return null;
+  if (url.startsWith("file:")) {
+    if (!windows && /^file:\/\/\/[a-zA-Z]:[\\/]/.test(url)) return null;
+    try {
+      return fileURLToPath(url, { windows });
+    } catch {
+      return null;
+    }
+  }
+  // On Windows, ProPresenter writes `absolute_string` as a Windows path (`C:\Users\…`) rather
+  // than a `file://` URL.
+  if (windows && (/^[a-zA-Z]:[\\/]/.test(url) || /^\\\\[^\\]+\\[^\\]+/.test(url))) {
+    return path.win32.normalize(decodePercent(url).replaceAll("/", "\\"));
+  }
+  if (!windows && url.startsWith("/") && !/^\/[a-zA-Z]:[\\/]/.test(url)) {
+    return path.posix.normalize(decodePercent(url));
+  }
+  return null;
+}
+
+/**
+ * Resolves a `ROOT_SHOW` path (`Media/Assets/…`) inside the workspace `folder`. ProPresenter
+ * writes this alongside `absolute_string`, and uses it when a workspace moves between machines or
+ * between macOS and Windows (where `absolute_string` still names the old machine's path).
+ */
+function resolveShowPath(folder: string | undefined, local: DecodedUrl["local"], windows: boolean): string | null {
+  if (!folder || local?.root !== ROOT_SHOW || !local.path) return null;
+  const segments = local.path.split(/[\\/]+/).filter(Boolean);
+  if (segments.length === 0 || segments.some((segment) => segment === "." || segment === "..")) return null;
+  const pathApi = windows ? path.win32 : path.posix;
+  return pathApi.join(folder, ...segments);
+}
+
+function resolveMediaPath(url: DecodedUrl | undefined, { windows, folder }: MapMacroMediaOptions): string | null {
+  return resolveShowPath(folder, url?.local, windows) ?? toFilePath(url?.absoluteString, windows);
 }
 
 /** Two macros can spell the same file differently: decomposed vs. composed accents on macOS, or
@@ -119,7 +174,7 @@ function cssColor(color: DecodedColor | undefined): string | null {
 
 interface DecodedProp {
   name: string | null;
-  media: DecodedMedia[];
+  media: Array<{ element: DecodedMedia; actionMedia?: DecodedActionMedia }>;
 }
 
 function propsByUuid(props: DecodedPropDocument): Map<string, DecodedProp> {
@@ -127,12 +182,17 @@ function propsByUuid(props: DecodedPropDocument): Map<string, DecodedProp> {
   for (const cue of props.cues ?? []) {
     const uuid = normalizeUuid(cue.uuid?.string);
     if (!uuid) continue;
-    const media = (cue.actions ?? []).flatMap((action) =>
-      (action.slide?.prop?.baseSlide?.elements ?? []).flatMap((element) => {
+    const media = (cue.actions ?? []).flatMap((action) => {
+      const items: Array<{ element: DecodedMedia; actionMedia?: DecodedActionMedia }> = [];
+      if (action.media?.element) {
+        items.push({ element: action.media.element, actionMedia: action.media });
+      }
+      for (const element of action.slide?.prop?.baseSlide?.elements ?? []) {
         const fillMedia = element.element?.fill?.media;
-        return fillMedia ? [fillMedia] : [];
-      }),
-    );
+        if (fillMedia) items.push({ element: fillMedia });
+      }
+      return items;
+    });
     byUuid.set(uuid, { name: cue.name?.trim() || null, media });
   }
   return byUuid;
@@ -166,8 +226,9 @@ export interface MacroMediaMap {
 export function mapMacroMedia(
   macrosDocument: DecodedMacrosDocument,
   props: DecodedPropDocument,
-  { windows }: MapMacroMediaOptions,
+  options: MapMacroMediaOptions,
 ): MacroMediaMap {
+  const { windows } = options;
   const pathApi = windows ? path.win32 : path.posix;
   const propsById = propsByUuid(props);
   const slots = new Map<string, MediaSlotRef>();
@@ -176,9 +237,9 @@ export function mapMacroMedia(
   const videoLengths: Record<string, Record<string, number>> = {};
 
   /** The slot id for the file, or null when it isn't an image or video on disk. */
-  const slotFor = (media: DecodedMedia): string | null => {
-    const mediaType = mediaTypeOf(media);
-    const filePath = toFilePath(media.url?.absoluteString, windows);
+  const slotFor = (media: DecodedMedia, actionMedia?: DecodedActionMedia): string | null => {
+    const mediaType = mediaTypeOf(media, actionMedia);
+    const filePath = resolveMediaPath(media.url, options);
     if (!mediaType || !filePath) return null;
 
     const key = fileKey(filePath, windows);
@@ -208,7 +269,7 @@ export function mapMacroMedia(
 
     for (const action of macro.actions ?? []) {
       if (action.media?.element) {
-        const slotId = slotFor(action.media.element);
+        const slotId = slotFor(action.media.element, action.media);
         if (slotId) {
           backgrounds.add(slotId);
           noteLength(slotId, action.media.element);
@@ -219,11 +280,11 @@ export function mapMacroMedia(
       const propUuid = normalizeUuid(identification?.parameterUuid?.string);
       const prop = propUuid ? propsById.get(propUuid) : undefined;
       if (!propUuid || !prop) continue;
-      const slotIds = [...new Set(prop.media.flatMap((media) => slotFor(media) ?? []))];
+      const slotIds = [...new Set(prop.media.flatMap((item) => slotFor(item.element, item.actionMedia) ?? []))];
       if (slotIds.length === 0) continue;
-      for (const media of prop.media) {
-        const slotId = slotFor(media);
-        if (slotId) noteLength(slotId, media);
+      for (const item of prop.media) {
+        const slotId = slotFor(item.element, item.actionMedia);
+        if (slotId) noteLength(slotId, item.element);
       }
       for (const slotId of slotIds) macroProps.add(slotId);
       propUses.push({ macroUuid, propUuid, propName: prop.name ?? identification?.parameterName?.trim() ?? "", slotIds });
