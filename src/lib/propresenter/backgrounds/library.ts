@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import path from "node:path";
 import type protobuf from "protobufjs";
@@ -67,7 +68,11 @@ export async function readMacroMedia(folder: string): Promise<MacroMediaMap> {
   const macros = decodeDocument<DecodedMacrosDocument>(await getMacrosDocumentType(), macrosBuffer);
   const props = propsBuffer ? decodeDocument<DecodedPropDocument>(await getPropDocumentType(), propsBuffer) : {};
 
-  const map = mapMacroMedia(macros, props, { windows: process.platform === "win32", folder });
+  const map = mapMacroMedia(macros, props, {
+    windows: process.platform === "win32",
+    folder,
+    fileExists: existsSync,
+  });
   macroMediaCache().set(folder, { stamp, map });
   return map;
 }

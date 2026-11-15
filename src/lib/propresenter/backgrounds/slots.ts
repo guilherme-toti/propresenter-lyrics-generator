@@ -86,6 +86,8 @@ export interface MapMacroMediaOptions {
   windows: boolean;
   /** The workspace folder on disk, to resolve `ROOT_SHOW` relative paths (`Media/Assets/…`). */
   folder?: string;
+  /** Whether a file is on disk. Injected so this module stays free of file I/O. */
+  fileExists?: (filePath: string) => boolean;
 }
 
 function mediaTypeOf(media: DecodedMedia, actionMedia?: DecodedActionMedia): MediaType | null {
@@ -132,8 +134,8 @@ function toFilePath(url: string | undefined, windows: boolean): string | null {
 
 /**
  * Resolves a `ROOT_SHOW` path (`Media/Assets/…`) inside the workspace `folder`. ProPresenter
- * writes this alongside `absolute_string`, and uses it when a workspace moves between machines or
- * between macOS and Windows (where `absolute_string` still names the old machine's path).
+ * writes this alongside `absolute_string`, and falls back to it when a workspace moves between
+ * machines or between macOS and Windows (where `absolute_string` still names the old machine's path).
  */
 function resolveShowPath(folder: string | undefined, local: DecodedUrl["local"], windows: boolean): string | null {
   if (!folder || local?.root !== ROOT_SHOW || !local.path) return null;
@@ -143,8 +145,18 @@ function resolveShowPath(folder: string | undefined, local: DecodedUrl["local"],
   return pathApi.join(folder, ...segments);
 }
 
-function resolveMediaPath(url: DecodedUrl | undefined, { windows, folder }: MapMacroMediaOptions): string | null {
-  return resolveShowPath(folder, url?.local, windows) ?? toFilePath(url?.absoluteString, windows);
+/**
+ * `absolute_string` is the file ProPresenter plays whenever it exists. The workspace folder the app
+ * was given can be a different copy (OneDrive's Documents next to the local one, an old
+ * `LocalWorkspaces` folder), and swapping that copy would change nothing on screen.
+ */
+function resolveMediaPath(
+  url: DecodedUrl | undefined,
+  { windows, folder, fileExists }: MapMacroMediaOptions,
+): string | null {
+  const absolute = toFilePath(url?.absoluteString, windows);
+  if (absolute && fileExists?.(absolute)) return absolute;
+  return resolveShowPath(folder, url?.local, windows) ?? absolute;
 }
 
 /** Two macros can spell the same file differently: decomposed vs. composed accents on macOS, or

@@ -393,3 +393,28 @@ test("ignores URLs that aren't files on disk", () => {
   };
   assert.deepEqual(mapMacroMedia(macros, {}, { windows: false }), { slots: [], macros: [], propUses: [], videoLengths: {} });
 });
+
+test("on Windows, prefers absoluteString over a workspace-relative copy when that file exists", () => {
+  const played = "C:\\Users\\Igreja\\Documents\\ProPresenter\\Media\\Assets\\fundo.jpg";
+  const folder = "C:\\Users\\Igreja\\OneDrive\\Documents\\ProPresenter";
+  const macros: DecodedMacrosDocument = {
+    macros: [
+      {
+        uuid: { string: "A8200000-0000-0000-0000-000000000002" },
+        name: "Fundo",
+        actions: [
+          {
+            media: {
+              element: { url: { absoluteString: played, local: { root: 10, path: "Media/Assets/fundo.jpg" } }, image: {} },
+            },
+          },
+        ],
+      },
+    ],
+  };
+  const existing = mapMacroMedia(macros, {}, { windows: true, folder, fileExists: (filePath) => filePath === played });
+  assert.equal(existing.slots[0].filePath, played);
+
+  const missing = mapMacroMedia(macros, {}, { windows: true, folder, fileExists: () => false });
+  assert.equal(missing.slots[0].filePath, `${folder}\\Media\\Assets\\fundo.jpg`);
+});
