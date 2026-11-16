@@ -3,7 +3,7 @@ import { evenSize, fitsVideoLevel, rgbaToI420 } from "./stillVideoFrames";
 
 /**
  * Turns an image into a still MP4, in the app's window: WebCodecs encodes H.264 there (VideoToolbox
- * on macOS), while the Node server has no encoder at all. Checked on ProPresenter 21.4 with a
+ * on macOS, OpenH264 on Windows), while the Node server has no encoder at all. Checked on ProPresenter 21.4 with a
  * looping macro: same colours as the image, and no flash at the loop.
  */
 
@@ -13,9 +13,14 @@ import { evenSize, fitsVideoLevel, rgbaToI420 } from "./stillVideoFrames";
  * the file within seconds of the swap. */
 const SECONDS = 10;
 /** The rate the encoder is told, not the frame's length. Below 1, Chromium before mid-2026
- * (crbug.com/513276597) truncates it to 0 and the hardware encoder divides by zero: on Windows the
- * encode then never finishes. */
+ * (crbug.com/513276597) truncates it to 0 and the hardware encoder divides by zero. */
 const FRAME_RATE = 1;
+/** Chromium's hardware H.264 encoder on Windows (WebView2 157) takes the frame and never hands it
+ * back: no output, no error, a flush that never settles. Its software encoder (OpenH264) does a
+ * 4K frame in about half a second and writes the frame's BT.709 full-range flags. WebKit (the
+ * macOS window) keeps its own choice: VideoToolbox, checked on ProPresenter. */
+const HARDWARE_ACCELERATION: HardwareAcceleration =
+  typeof navigator !== "undefined" && navigator.userAgent.includes("Chrome/") ? "prefer-software" : "no-preference";
 /** High profile, level 5.1: up to 4096×2304 (see fitsVideoLevel). */
 const CODEC = "avc1.640033";
 /** A ceiling, not what's spent: the one frame takes what it needs (about 0.5 MB for 2304×1152).
@@ -63,6 +68,7 @@ export async function encodeStillVideo(imageUrl: string): Promise<Uint8Array> {
     fullCodecString: CODEC,
     bitrate: BITRATE,
     latencyMode: "quality",
+    hardwareAcceleration: HARDWARE_ACCELERATION,
   });
   output.addVideoTrack(source, { frameRate: FRAME_RATE });
 
