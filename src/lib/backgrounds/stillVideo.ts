@@ -12,6 +12,10 @@ import { evenSize, fitsVideoLevel, rgbaToI420 } from "./stillVideoFrames";
  * time the loop came back to the start. Any length loops the same; ProPresenter re-reads it from
  * the file within seconds of the swap. */
 const SECONDS = 10;
+/** The rate the encoder is told, not the frame's length. Below 1, Chromium before mid-2026
+ * (crbug.com/513276597) truncates it to 0 and the hardware encoder divides by zero: on Windows the
+ * encode then never finishes. */
+const FRAME_RATE = 1;
 /** High profile, level 5.1: up to 4096×2304 (see fitsVideoLevel). */
 const CODEC = "avc1.640033";
 /** A ceiling, not what's spent: the one frame takes what it needs (about 0.5 MB for 2304×1152).
@@ -60,7 +64,7 @@ export async function encodeStillVideo(imageUrl: string): Promise<Uint8Array> {
     bitrate: BITRATE,
     latencyMode: "quality",
   });
-  output.addVideoTrack(source, { frameRate: 1 / SECONDS });
+  output.addVideoTrack(source, { frameRate: FRAME_RATE });
 
   try {
     await output.start();
