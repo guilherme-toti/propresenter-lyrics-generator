@@ -31,7 +31,7 @@ Run every command from the repo root, on `main`.
 
 1. **Recall.** Dispatch `knowledge-keeper` with `MODE: RECALL`: "PMA Lyrics Studio release: last version, open drafts or stray tags, DevTools state, traps of past runs." Let it run in the background while you do step 2.
 2. **Meet the prompt's preconditions first.** "As soon as everything runs and there's no follow-up", "fix it then", "none for now": finish that work, including any browser check still running, before you commit. If it fails or leaves a follow-up, stop and report. Don't release.
-3. **DevTools: do what the user says. Otherwise leave it as it is.** It has been on since v0.9.6 (`d122b8b`), so Windows problems can be debugged in the release app.
+3. **DevTools: do what the user says. Otherwise leave it as it is.** It is off from v0.9.8 on; v0.9.6 and v0.9.7 shipped with it on (`d122b8b`) to debug a Windows hang. Turn it on again only to debug a release build.
    - "devtools still on", or nothing said: leave `Cargo.toml` alone.
    - "devtools off" or "turn off devtools": set `features = []` on the `tauri =` line of `src-tauri/Cargo.toml`. It's a one-line change, and `Cargo.lock` doesn't change. Land it as its own commit, `chore(desktop): disable devtools in release builds`.
    - "turn devtools on": the reverse, `chore(desktop): enable devtools in release builds`.

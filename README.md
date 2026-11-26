@@ -93,7 +93,7 @@ The installed app checks for a newer release on every launch (background check, 
    gh workflow run bump-version.yml --ref main -f bump=<patch|minor|major>
    ```
 
-   Its `bump` job bumps `version` in `src-tauri/tauri.conf.json`, commits "Bump version to vX.Y.Z" to `main`, tags it `vX.Y.Z` and pushes both. It pushes with the `RELEASE_PAT` repo secret (a fine-grained PAT with Contents: Read and write), because a push made with the default `GITHUB_TOKEN` wouldn't trigger `release.yml`. Run `git pull` afterwards so your checkout has the bump commit.
+   Its `bump` job bumps `version` in `src-tauri/tauri.conf.json`, commits "Bump version to vX.Y.Z" to `main`, tags it `vX.Y.Z` and pushes both. It pushes with the `RELEASE_PAT` repo secret (a fine-grained PAT with Contents: Read and write), because a push made with the default `GITHUB_TOKEN` wouldn't trigger `release.yml`. Run `git pull --rebase` afterwards so your checkout has the bump commit.
 2. Wait for "Release desktop app" (~10-25 min). Its `release` job builds macOS, Linux and Windows into a **draft** GitHub Release with every installer attached, plus a `latest.json` manifest the updater reads. The bump run's "Watch the release build" step follows that run and fails if it fails, so the bump run alone tells you how the release went (if it can't find the run within ~2.5 min it only warns — check the Actions tab then).
 3. Once all three builds succeed, its `publish` job publishes the draft automatically — there's nothing to click. Publishing is what makes `releases/latest/...` resolve to this version, so that's when existing installs start updating.
 
